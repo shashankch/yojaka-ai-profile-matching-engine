@@ -195,61 +195,20 @@ pip install -e .
 
 ### 2. Configure Credentials
 
-Copy the provided sample environment file:
+Copy `.env.example` to create your local `.env` file and populate your preferred LLM provider API key (at least one is required):
 
 ```bash
 cp .env.example .env
 ```
 
-Populate your preferred provider credentials in `.env`:
-
-```env
-# ==============================================================================
-# 🤖 LLM Inference Providers (At least one required)
-# ==============================================================================
-GROQ_API_KEY="your-groq-api-key"          # Free-tier fast inference (Llama 3.3 70B)
-GEMINI_API_KEY="your-gemini-api-key"      # Google Gemini 2.0 Pro / Flash
-SARVAM_API_KEY=""                         # (Optional) Sarvam AI 105B Indic model
-OPENAI_API_KEY=""                         # (Optional) OpenAI GPT-4o / GPT-4o-mini
-
-# ==============================================================================
-# 🌐 Live Web & Portfolio Search (Optional)
-# ==============================================================================
-TAVILY_API_KEY=""                         # Real-time web search for tech trends & candidate portfolios
-
-# ==============================================================================
-# 🔌 Model Context Protocol (MCP) Mode
-# ==============================================================================
-USE_MCP=False                             # False: Direct in-process | True: FastMCP stdio JSON-RPC
-MCP_TIMEOUT=30.0                          # MCP client request timeout (seconds)
-
-# ==============================================================================
-# 📊 Observability & Distributed Tracing (Optional)
-# ==============================================================================
-OBSERVABILITY_BACKEND=none                # none | langfuse | opentelemetry
-LANGFUSE_PUBLIC_KEY=""
-LANGFUSE_SECRET_KEY=""
-LANGFUSE_HOST="https://cloud.langfuse.com"
-OTEL_EXPORTER_OTLP_ENDPOINT=""
-
-# ==============================================================================
-# ⚡ Distributed Background Task Queue (Optional)
-# ==============================================================================
-REDIS_URL="redis://localhost:6379/0"
-CELERY_BROKER_URL="redis://localhost:6379/0"
-CELERY_RESULT_BACKEND="redis://localhost:6379/0"
-```
-
-#### ⚙️ Configuration & Environment Variables Reference
-
 | Variable | Required? | Default | Description |
 |:---|:---:|:---|:---|
-| `GROQ_API_KEY` | Conditional | `""` | API key for Groq inference (Llama 3.3 70B). Required if Groq selected. |
-| `GEMINI_API_KEY` | Conditional | `""` | API key for Google Gemini Pro. Required if Gemini selected. |
+| `GROQ_API_KEY` | Conditional | `""` | API key for Groq inference (Llama 3.3 70B, free-tier fast default). |
+| `GEMINI_API_KEY` | Conditional | `""` | API key for Google Gemini 2.0 Pro / Flash. |
 | `SARVAM_API_KEY` | Optional | `""` | API key for Sarvam AI Indic language models (`sarvam-105b`). |
 | `OPENAI_API_KEY` | Optional | `""` | API key for OpenAI GPT-4o models. |
-| `TAVILY_API_KEY` | Optional | `""` | API key for live internet search & candidate portfolio verification in chat. |
-| `USE_MCP` | Optional | `False` | Toggles Model Context Protocol JSON-RPC `stdio` servers (`True`) vs direct in-process (`False`). |
+| `TAVILY_API_KEY` | Optional | `""` | Real-time web search for tech trends & candidate portfolio verification in chat. |
+| `USE_MCP` | Optional | `False` | Toggles FastMCP JSON-RPC `stdio` servers (`True`) vs direct in-process (`False`). |
 | `MCP_TIMEOUT` | Optional | `30.0` | Timeout in seconds for FastMCP JSON-RPC communication. |
 | `OBSERVABILITY_BACKEND`| Optional | `none` | Telemetry backend: `none`, `langfuse`, or `opentelemetry`. |
 | `LANGFUSE_PUBLIC_KEY` | Optional | `""` | Public key for Langfuse APM tracing. |
@@ -261,6 +220,8 @@ CELERY_RESULT_BACKEND="redis://localhost:6379/0"
 | `CELERY_RESULT_BACKEND`| Optional | `redis://localhost:6379/0` | Celery asynchronous task execution result backend. |
 | `EMBEDDING_MODEL` | Optional | `sentence-transformers/all-MiniLM-L6-v2` | Hugging Face dense embedding model for RAG vectorization. |
 | `VECTOR_DB_PATH` | Optional | `./chroma_db` | Filesystem directory for local persistent ChromaDB vectors. |
+
+> 💡 *See [`.env.example`](.env.example) for a pre-configured template and [Architecture Section 14](docs/architecture.md#14-environment-variables--runtime-configuration-reference) for runtime configuration semantics.*
 
 ### 3. Generate Mock Data & Ingest
 
