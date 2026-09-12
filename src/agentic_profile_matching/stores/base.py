@@ -1,11 +1,11 @@
-from typing import Protocol, runtime_checkable, List, Dict, Any
+from typing import Protocol, runtime_checkable, List, Dict, Any, Optional
 
 
 @runtime_checkable
 class BaseVectorStore(Protocol):
     """
     Structural typing protocol defining standard vector store contract.
-    Decouples storage operations (upsert, query, count) from specific engine implementations.
+    Decouples storage operations (upsert, query, count, delete) from specific engine implementations.
     """
 
     def upsert(
@@ -32,4 +32,12 @@ class BaseVectorStore(Protocol):
 
     def count(self) -> int:
         """Return the total document chunk count stored in the vector collection."""
+        ...
+
+    def delete(
+        self,
+        ids: Optional[List[str]] = None,
+        where: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Prune or delete document chunks by ID list or metadata filter."""
         ...

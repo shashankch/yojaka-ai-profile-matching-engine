@@ -77,6 +77,34 @@ class TestIngestionService(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("Directory not found", result["error"])
 
+    def test_ingest_stream_success(self):
+        """Test in-memory zero-disk stream ingestion (ADR-016)."""
+        mock_pipeline = MagicMock()
+        mock_pipeline.embedder.encode.return_value.tolist.return_value = [0.1, 0.2, 0.3]
+
+        service = IngestionService(pipeline=mock_pipeline)
+        raw_text = (
+            "Alice Walker\nEXPERIENCE\n6 years in Java, Python, and AWS Cloud.\nEDUCATION\nM.S. Software Engineering\n"
+        )
+        stream_bytes = raw_text.encode("utf-8")
+
+        result = service.ingest_stream("alice_walker_resume.txt", stream_bytes)
+        self.assertTrue(result["success"])
+        self.assertEqual(result["candidate_name"], "Alice Walker")
+        self.assertTrue(result["filepath"].startswith("stream://alice_walker_resume.txt"))
+        self.assertIn("hash=", result["filepath"])
+        self.assertIn("raw_text", result)
+        self.assertGreater(result["chunks_ingested"], 0)
+        self.assertTrue(mock_pipeline.store.delete.called)
+        self.assertTrue(mock_pipeline.store.upsert.called)
+
+    def test_ingest_stream_empty(self):
+        """Test empty stream buffer handling."""
+        service = IngestionService(pipeline=MagicMock())
+        result = service.ingest_stream("empty.txt", b"")
+        self.assertFalse(result["success"])
+        self.assertIn("Empty stream", result["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

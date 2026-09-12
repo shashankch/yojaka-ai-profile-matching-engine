@@ -1,7 +1,7 @@
 # ADR-012: Functional State Immutability & LangGraph Node Invariance
 
 ## Status
-Accepted (Planned for `v1.2.0`, Phase 11.2)
+Implemented (Released in `v1.2.0`, Phase 15)
 
 ## Context
 In LangGraph, node functions must behave as pure, idempotent transitions receiving an immutable state snapshot and returning partial state update dictionaries. In-place mutation of nested dictionary references (e.g. iterating over `state["shortlist"]` and directly mutating `c["strengths"] = ...` or `c["screening_status"] = ...`) breaks checkpoint idempotency. If a node fails or is interrupted mid-execution, re-running the node operates on corrupted, partially-mutated state.

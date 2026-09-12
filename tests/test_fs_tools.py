@@ -59,7 +59,7 @@ def test_read_pdf_file_pypdf_fallback(mock_pdf_reader, temp_dir):
     mock_page.extract_text.return_value = "PDF page content"
     mock_pdf_reader.return_value.pages = [mock_page]
 
-    with patch.dict("sys.modules", {"fitz": None}):
+    with patch.dict("sys.modules", {"pymupdf": None, "fitz": None}):
         res = read_file(str(file_path))
         assert res["success"] is True
         assert res["content"] == "PDF page content"
@@ -75,10 +75,11 @@ def test_read_pdf_file_pymupdf(temp_dir):
     mock_page.get_text.return_value = "PyMuPDF sorted layout text"
     mock_doc.__iter__.return_value = [mock_page]
 
-    with patch("fitz.open", return_value=mock_doc):
-        res = read_file(str(file_path))
-        assert res["success"] is True
-        assert res["content"] == "PyMuPDF sorted layout text"
+    with patch("pymupdf.open", return_value=mock_doc, create=True):
+        with patch("fitz.open", return_value=mock_doc, create=True):
+            res = read_file(str(file_path))
+            assert res["success"] is True
+            assert res["content"] == "PyMuPDF sorted layout text"
 
 
 def test_read_pdf_unstructured_option(temp_dir, monkeypatch):

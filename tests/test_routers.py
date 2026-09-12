@@ -87,3 +87,46 @@ def test_classify_via_llm(mock_get_llm, mock_invoke_structured):
 
     decision = _classify_via_llm(state)
     assert decision == "conversational_query"
+
+
+def test_route_input_general_tech_query_with_empty_requirements():
+    state: AgentState = {
+        "messages": [HumanMessage(content="can you tell me about graph enginnering in 2026")],
+        "requirements": {},
+        "shortlist": [],
+    }
+    assert route_input(state) == "conversational_query"
+
+
+def test_route_input_web_search_query():
+    state: AgentState = {
+        "messages": [HumanMessage(content="search google for python 3.14 features")],
+        "requirements": {},
+        "shortlist": [],
+    }
+    assert route_input(state) == "conversational_query"
+
+
+def test_route_input_explicit_candidate_sourcing():
+    state: AgentState = {
+        "messages": [HumanMessage(content="Search resumes for Python cloud architects with 5+ years experience")],
+        "requirements": {},
+        "shortlist": [],
+    }
+    assert route_input(state) == "extract_requirements"
+
+
+@patch("agentic_profile_matching.tools.invoke_structured")
+def test_generate_dynamic_intent_anchors(mock_invoke_structured):
+    mock_invoke_structured.return_value = {
+        "extract_requirements": ["Find candidates with Go", "Source Java architects"],
+        "adjust_requirements": ["Add Rust to skills", "Require 5+ years"],
+        "conversational_query": ["What is LangGraph?", "Compare top profiles"],
+    }
+    from agentic_profile_matching.agent.routers import generate_dynamic_intent_anchors
+
+    mock_llm = MagicMock()
+    anchors = generate_dynamic_intent_anchors(mock_llm)
+    assert "extract_requirements" in anchors
+    assert len(anchors["extract_requirements"]) == 2
+    assert "conversational_query" in anchors

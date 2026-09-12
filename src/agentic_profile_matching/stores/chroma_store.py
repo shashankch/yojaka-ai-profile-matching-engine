@@ -13,21 +13,31 @@ logger = logging.getLogger("chroma_store")
 class ChromaVectorStore:
     """
     ChromaDB implementation of BaseVectorStore protocol.
-    Wraps chromadb.PersistentClient with domain exception handling and consistent response formatting.
+    Wraps chromadb.PersistentClient or chromadb.EphemeralClient with domain exception handling
+    and consistent response formatting.
     """
 
     def __init__(
         self,
         collection_name: str = "resumes",
         db_path: Optional[str] = None,
+        ephemeral: bool = False,
+        client: Optional[Any] = None,
     ):
         self.collection_name = collection_name
         self.db_path = db_path or config.VECTOR_DB_PATH
+        self.ephemeral = ephemeral
         try:
-            self.client = chromadb.PersistentClient(path=self.db_path)
+            if client is not None:
+                self.client = client
+            elif ephemeral:
+                self.client = chromadb.EphemeralClient()
+            else:
+                self.client = chromadb.PersistentClient(path=self.db_path)
             self.collection = self.client.get_or_create_collection(self.collection_name)
         except Exception as e:
-            logger.error(f"Failed to initialize ChromaDB persistent client at '{self.db_path}': {e}")
+            mode = "ephemeral" if ephemeral else f"persistent at '{self.db_path}'"
+            logger.error(f"Failed to initialize ChromaDB ({mode}): {e}")
             raise VectorStoreError(f"ChromaDB initialization error: {e}") from e
 
     def upsert(
@@ -75,3 +85,20 @@ class ChromaVectorStore:
         except Exception as e:
             logger.error(f"Failed to count items in collection '{self.collection_name}': {e}")
             raise VectorStoreError(f"ChromaDB count failed: {e}") from e
+
+    def delete(
+        self,
+        ids: Optional[List[str]] = None,
+        where: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        try:
+            kwargs: Dict[str, Any] = {}
+            if ids:
+                kwargs["ids"] = ids
+            if where:
+                kwargs["where"] = where
+            if kwargs:
+                self.collection.delete(**kwargs)
+        except Exception as e:
+            logger.error(f"Failed to delete items from collection '{self.collection_name}': {e}")
+            raise VectorStoreError(f"ChromaDB delete failed: {e}") from e

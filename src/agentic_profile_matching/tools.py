@@ -37,6 +37,10 @@ class JobRequirementsOutput(BaseModel):
     title: str = Field(default="Software Engineer", description="Extracted job title")
     must_have_skills: List[str] = Field(default_factory=list, description="Mandatory technical skills and tools")
     nice_to_have_skills: List[str] = Field(default_factory=list, description="Preferred/optional technical skills")
+    skill_expansions: Dict[str, List[str]] = Field(
+        default_factory=dict,
+        description="Dynamic semantic equivalents, cloud providers, frameworks, or child technologies for extracted skills",
+    )
     min_experience_years: int = Field(default=0, description="Minimum years of professional experience required")
     education_level: str = Field(default="Not Specified", description="Required education level (e.g. B.Tech, MS, PhD)")
     other_constraints: List[str] = Field(
@@ -201,6 +205,7 @@ def extract_requirements(jd: str, llm) -> Dict[str, Any]:
     Extracts structured job requirements from an unstructured JD string using structured output.
     """
     system_prompt = """You are a professional recruiting assistant. Analyze the provided Job Description (JD) and extract the job requirements.
+For any broad skill or technology (e.g. "Cloud", "Backend", "Frontend", "Machine Learning", "DevOps", "Database"), provide a list of concrete semantic equivalents, major providers, or common frameworks in `skill_expansions` (e.g. {"Cloud": ["AWS", "GCP", "Azure", "Kubernetes", "EKS"], "Java": ["Spring Boot", "JVM", "Core Java"], "Python": ["Django", "FastAPI", "Flask"]}).
 You MUST return a valid JSON object matching the requested schema."""
 
     def _call():

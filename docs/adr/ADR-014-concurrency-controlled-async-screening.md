@@ -1,7 +1,7 @@
 # ADR-014: Concurrency-Controlled Asynchronous Candidate Screening
 
 ## Status
-Accepted (Planned for `v1.3.0`, Phase 12.1)
+Implemented (Released in `v1.2.0`, Phase 15)
 
 ## Context
 Sequential execution of multi-candidate deep text screening in `deep_screen_node` (5 candidates $\times$ ~15s LLM audit) introduces 60–75 seconds of blocking latency, freezing web UI event loops. Unbounded parallel execution, however, triggers immediate HTTP 429 Rate Limit exceptions (RPM/TPM exhaustion) from cloud inference providers.

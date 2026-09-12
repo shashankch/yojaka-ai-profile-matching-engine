@@ -71,15 +71,16 @@ USE_UNSTRUCTURED = os.getenv("USE_UNSTRUCTURED", "false").lower() == "true"
 
 
 def get_llm_model(provider: str, model_name: str, api_key: str, api_url: Optional[str] = None):
-    if provider == "Groq":
+    prov = (provider or "").strip().lower()
+    if prov == "groq":
         from langchain_groq import ChatGroq
 
         return ChatGroq(model=model_name, api_key=api_key)
-    elif provider == "Gemini":
+    elif prov in ("gemini", "google"):
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         return ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
-    elif provider == "Sarvam AI":
+    elif "sarvam" in prov:
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
@@ -87,13 +88,17 @@ def get_llm_model(provider: str, model_name: str, api_key: str, api_url: Optiona
             api_key=api_key,
             base_url="https://api.sarvam.ai/v1",
         )
-    elif provider == "OpenAI":
+    elif prov == "openai":
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(model=model_name, api_key=api_key)
-    elif provider == "Custom (OpenAI-compatible)":
+    elif "custom" in prov or "openai-compatible" in prov:
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(model=model_name, api_key=api_key, base_url=api_url)
+        return ChatOpenAI(
+            model=model_name,
+            api_key=api_key,
+            base_url=api_url or "http://localhost:11434/v1",
+        )
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}")

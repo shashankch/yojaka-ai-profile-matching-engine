@@ -1,12 +1,13 @@
 <div align="center">
 
-# 🤖 Agentic Profile Matching Engine
+# 💼 Yojaka AI (Agentic Profile Matching Engine)
 
 <p align="center">
-  <a href="https://github.com/shashankch/agentic-profile-matching-engine/actions/workflows/ci.yml"><img src="https://github.com/shashankch/agentic-profile-matching-engine/actions/workflows/ci.yml/badge.svg" alt="Python CI"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.1.0-blue.svg" alt="Version: v1.1.0"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg" alt="Python Version"></a>
-  <a href="docs/adr/README.md"><img src="https://img.shields.io/badge/ADRs-15%20Accepted-teal.svg" alt="Architecture Decision Records"></a>
+  <a href="https://yojaka-ai-job-profile-matching-engine.streamlit.app/"><img src="https://static.streamlit.io/badges/streamlit_badge_black_white.svg" alt="Streamlit App"></a>
+  <a href="https://github.com/shashankch/yojaka-ai-profile-matching-engine/actions/workflows/ci.yml"><img src="https://github.com/shashankch/yojaka-ai-profile-matching-engine/actions/workflows/ci.yml/badge.svg" alt="Python CI"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.2.0-blue.svg" alt="Version: v1.2.0"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue.svg" alt="Python Version"></a>
+  <a href="docs/adr/README.md"><img src="https://img.shields.io/badge/ADRs-16%20Accepted-teal.svg" alt="Architecture Decision Records"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Linter: Ruff"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="docs/CONVENTIONS.md"><img src="https://img.shields.io/badge/Conventions-Architectural-purple.svg" alt="Conventions"></a>
@@ -14,12 +15,20 @@
 </p>
 
 <p align="center">
-  <strong>An interactive AI Recruiter & Profile Matching Engine built with LangGraph, Hybrid RAG (Semantic Vector + BM25 Okapi), and the Model Context Protocol (MCP).</strong>
+  <strong>An interactive AI Recruiter & Profile Matching Engine built with LangGraph, Hybrid RAG (Semantic Vector + BM25 Okapi), Dynamic Semantic Skill Expansion, Zero-Disk In-Memory Upload, and Model Context Protocol (MCP).</strong>
+</p>
+
+<div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%); border: 1px solid rgba(129, 140, 248, 0.25); border-radius: 12px; padding: 16px 24px; margin: 20px auto; max-width: 860px; text-align: center;">
+  <p style="margin: 0; font-size: 1.02rem; line-height: 1.65; color: #cbd5e1;">
+    In classical Sanskrit, <strong>योजक (Yojaka)</strong> derives from the root <em>युज् (yuj)</em> — meaning <em>to connect, unite, align, or orchestrate</em>. Rather than treating candidate vetting as a cold keyword gatekeeper, <strong>Yojaka AI</strong> operates as an intelligent orchestrator: parsing unstructured human potential, dynamically expanding semantic equivalences, and cascading through structured reasoning to match talent with purpose.
+  </p>
+</div>
+
+<p align="center">
+  <img src="docs/assets/yojaka_demo.gif" alt="Yojaka AI End-to-End Walkthrough Demo" width="94%" style="border-radius: 8px; border: 1px solid #334155; box-shadow: 0 8px 30px rgba(0,0,0,0.18);">
 </p>
 
 </div>
-
-The engine automates multi-stage candidate vetting by parsing unstructured job descriptions, executing a cost-efficient **3-Round Cascading Screening Funnel**, producing grounded hiring recommendations with tailored technical interview questions, and enabling real-time conversational requirement adjustments mid-session.
 
 ---
 
@@ -28,11 +37,12 @@ The engine automates multi-stage candidate vetting by parsing unstructured job d
 ```mermaid
 graph TB
     subgraph UI ["🖥️ Presentation Layer"]
-        Streamlit["Streamlit Recruiter Dashboard<br/>(Chat Workspace, Shortlist Cards, Comparison Matrix)"]
+        Streamlit["Streamlit Recruiter Dashboard<br/>(Chat Workspace, Talent Pool & Ingestion Tab, Shortlist Cards, Comparison Matrix)"]
     end
 
     subgraph AgenticCore ["🧠 LangGraph Orchestration State Machine"]
         StateGraph["9-Node StateGraph (MemorySaver Checkpointing)"]
+        RouterNode["🔀 LLM-Driven Intent Router (ADR-009)<br/>(LRU Cache + RouteDecision + Dynamic Anchors)"]
         ParseNode["parse_input_node"]
         ExtractNode["extract_requirements_node"]
         SearchNode["search_resumes_node"]
@@ -53,7 +63,8 @@ graph TB
     subgraph Storage ["💾 Storage & Retrieval Layer"]
         VectorStore["BaseVectorStore Protocol (ADR-003)<br/>ChromaDB / Qdrant"]
         BM25Cache["BM25 Okapi Sparse Index (ADR-004)"]
-        PyMuPDF["PyMuPDF Layout Ingestion (fitz)"]
+        PyMuPDF["PyMuPDF Layout Ingestion (pymupdf)"]
+        StreamUpload["In-Memory Zero-Disk Stream Ingestion (ADR-016)"]
     end
 
     subgraph ObservabilityWorkers ["⚡ Observability & Distributed Queue"]
@@ -70,6 +81,36 @@ graph TB
     MCPMode --> Storage
     StateGraph -.-> ObservabilityWorkers
     Storage -.-> ObservabilityWorkers
+```
+
+---
+
+## 🔀 LLM-Driven Intent Routing & Disambiguation
+
+In real-world recruiter dialogues, users alternate between **general technology inquiries**, **external web searches**, **active constraint adjustments**, and **explicit candidate sourcing**. Rather than relying on fragile keyword arrays or static string anchors, Yojaka AI implements an **LLM-Driven Intent Router** with in-memory caching and dynamic intent prototypes:
+
+```mermaid
+flowchart TD
+    UserQuery["👤 Recruiter Message<br/>(e.g. 'Search Python resumes' vs 'Tell me about graph engineering in 2026')"] --> FastPath{"⚡ Structural Fast-Path?"}
+    
+    FastPath -->|"Empty Message / Multi-Line JD Paste"| ExtractNode["📋 extract_requirements_node<br/>(Extracts role constraints & triggers screening)"]
+    FastPath -->|"Natural Language Query"| CacheCheck{"⚡ Query Cache Hit?<br/>(LRU Memory Cache)"}
+    
+    CacheCheck -->|"Cache Hit (0ms)"| CachedBranch["Branch to Cached Intent"]
+    CacheCheck -->|"Cache Miss"| LLMRouter["🧠 Primary Tier: LLM Intent Classifier<br/>(Structured Output with RouteDecision)"]
+    
+    LLMRouter -->|"Candidate Sourcing / JD"| ExtractNode
+    LLMRouter -->|"Constraint Refinements"| AdjustNode["🔄 adjust_requirements_node<br/>(Update active skills & experience)"]
+    LLMRouter -->|"Tech Question / Web Search / Q&A"| ConvNode["💬 conversational_query_node<br/>(Direct answer via search tools & candidate notes)"]
+    
+    LLMRouter -.->|"API Offline / Fallback"| SemanticRouter["🔵 Secondary Tier: Semantic Embedding Router<br/>(Cosine similarity against dynamic intent prototypes)"]
+    SemanticRouter --> ExtractNode
+    SemanticRouter --> AdjustNode
+    SemanticRouter --> ConvNode
+
+    ExtractNode --> ScreeningPipeline["🎯 3-Stage Screening Cascade<br/>(Hybrid Search ➔ Deep Screen ➔ Decision)"]
+    AdjustNode --> ScreeningPipeline
+    ConvNode --> UserResponse["✅ Direct Conversational Answer<br/>(Zero unwanted candidate screening)"]
 ```
 
 ---
@@ -110,11 +151,13 @@ The engine is built following formal **Architecture Decision Records (ADRs)** do
 | **[ADR-001](docs/adr/ADR-001-mcp-dual-mode-gateway-architecture.md)** | **Model Context Protocol (MCP) Dual Gateway** | Hot-swap between in-process Python and FastMCP JSON-RPC `stdio` servers |
 | **[ADR-006](docs/adr/ADR-006-celery-redis-task-queue.md)** | **Distributed Celery + Redis Task Queue** | Non-blocking background PDF ingestion and parallel candidate audits |
 | **[ADR-008](docs/adr/ADR-008-multi-factor-hybrid-scoring-and-hierarchy.md)** | **Multi-Factor Hybrid Scoring & Hierarchy** | Min-max dense/sparse scoring with grounded LLM safety guardrails |
-| **[ADR-009](docs/adr/ADR-009-tiered-semantic-embedding-intent-routing.md)** | **Tiered Semantic Vector Intent Routing** | < 2ms local semantic similarity with zero-cost dispatch for 85%+ requests |
+| **[ADR-009](docs/adr/ADR-009-tiered-semantic-embedding-intent-routing.md)** | **LLM-Driven Intent Routing & Dynamic Anchors** | Zero-shot structured intent routing with dynamic anchors and LRU query caching |
 | **[ADR-010](docs/adr/ADR-010-multi-provider-sarvam-indic-llm.md)** | **Multi-Provider & Indic Model Support** | Unified LLM abstraction for Sarvam AI (105B Indic), Groq, Gemini, and OpenAI |
 | **[ADR-011](docs/adr/ADR-011-stateless-credential-isolation.md)** | **Stateless Credential Isolation** | Purge keys from `AgentState` to prevent CWE-312 leakage in checkpoints |
+| **[ADR-016](docs/adr/ADR-016-zero-disk-in-memory-resume-ingestion.md)** | **Zero-Disk In-Memory Resume Ingestion & Ephemeral PII Isolation** | In-memory stream parsing with session-isolated ephemeral vector collections (ADR-016) |
 
-> 📚 **Complete Architecture Catalog**: View all 15 formal Architecture Decision Records with context, alternatives, and consequences in [**`docs/adr/README.md`**](docs/adr/README.md).
+
+> 📚 **Complete Architecture Catalog**: View all 16 formal Architecture Decision Records with context, alternatives, and consequences in [**`docs/adr/README.md`**](docs/adr/README.md).
 
 ---
 
@@ -126,7 +169,7 @@ The engine is built following formal **Architecture Decision Records (ADRs)** do
 | **Vector Storage** | [ChromaDB] (Default Persistent Store), [Qdrant] (Enterprise Vector Store Stub) | `BaseVectorStore` protocol injection |
 | **Sparse Retrieval** | [Rank-BM25] (BM25Okapi with stop-word tokenization and cache invalidation) | `job_matcher.py` |
 | **LLM Providers** | [Groq API], [Google Gemini Pro], [Sarvam AI] (`sarvam-105b`), [OpenAI] | `.env` credentials & UI dropdown |
-| **Document Ingestion** | **PyMuPDF** (`fitz` multi-column layout sorting), **Unstructured.io**, `python-docx`, `pypdf` | `IngestionService` + `fs_tools.py` |
+| **Document Ingestion** | **PyMuPDF** (`pymupdf` layout extraction), **In-Memory Zero-Disk Upload** (ADR-016), `python-docx`, `pypdf`, `Unstructured.io` | `IngestionService` + `fs_tools.py` |
 | **Protocol Standards** | [Model Context Protocol (MCP)][mcp] (FastMCP `stdio` JSON-RPC 2.0 servers) | `USE_MCP=True/False` |
 | **Observability** | Structured JSON Logs, [Langfuse], [OpenTelemetry] (OTLP), `@trace_node` | `OBSERVABILITY_BACKEND` |
 | **Background Workers** | [Celery] distributed task queue + [Redis 7] broker & state backend | `docker-compose.yml` |
@@ -139,8 +182,8 @@ The engine is built following formal **Architecture Decision Records (ADRs)** do
 
 ```bash
 # Clone the repository
-git clone https://github.com/shashankch/agentic-profile-matching-engine.git
-cd agentic-profile-matching-engine
+git clone https://github.com/shashankch/yojaka-ai-profile-matching-engine.git
+cd yojaka-ai-profile-matching-engine
 
 # Create and activate virtual environment (Python 3.10+)
 python3 -m venv .venv
@@ -152,24 +195,77 @@ pip install -e .
 
 ### 2. Configure Credentials
 
-Create a `.env` file in the root directory:
+Copy the provided sample environment file:
+
+```bash
+cp .env.example .env
+```
+
+Populate your preferred provider credentials in `.env`:
 
 ```env
-# Free-tier Developer API Keys (Choose one or both)
-GROQ_API_KEY="your-groq-api-key"
-GEMINI_API_KEY="your-gemini-api-key"
+# ==============================================================================
+# 🤖 LLM Inference Providers (At least one required)
+# ==============================================================================
+GROQ_API_KEY="your-groq-api-key"          # Free-tier fast inference (Llama 3.3 70B)
+GEMINI_API_KEY="your-gemini-api-key"      # Google Gemini 2.0 Pro / Flash
+SARVAM_API_KEY=""                         # (Optional) Sarvam AI 105B Indic model
+OPENAI_API_KEY=""                         # (Optional) OpenAI GPT-4o / GPT-4o-mini
 
-# MCP Protocol Mode (False: Direct local execution | True: stdio JSON-RPC servers)
-USE_MCP=False
+# ==============================================================================
+# 🌐 Live Web & Portfolio Search (Optional)
+# ==============================================================================
+TAVILY_API_KEY=""                         # Real-time web search for tech trends & candidate portfolios
 
-# Observability Backend (none | langfuse | opentelemetry)
-OBSERVABILITY_BACKEND=none
+# ==============================================================================
+# 🔌 Model Context Protocol (MCP) Mode
+# ==============================================================================
+USE_MCP=False                             # False: Direct in-process | True: FastMCP stdio JSON-RPC
+MCP_TIMEOUT=30.0                          # MCP client request timeout (seconds)
+
+# ==============================================================================
+# 📊 Observability & Distributed Tracing (Optional)
+# ==============================================================================
+OBSERVABILITY_BACKEND=none                # none | langfuse | opentelemetry
+LANGFUSE_PUBLIC_KEY=""
+LANGFUSE_SECRET_KEY=""
+LANGFUSE_HOST="https://cloud.langfuse.com"
+OTEL_EXPORTER_OTLP_ENDPOINT=""
+
+# ==============================================================================
+# ⚡ Distributed Background Task Queue (Optional)
+# ==============================================================================
+REDIS_URL="redis://localhost:6379/0"
+CELERY_BROKER_URL="redis://localhost:6379/0"
+CELERY_RESULT_BACKEND="redis://localhost:6379/0"
 ```
+
+#### ⚙️ Configuration & Environment Variables Reference
+
+| Variable | Required? | Default | Description |
+|:---|:---:|:---|:---|
+| `GROQ_API_KEY` | Conditional | `""` | API key for Groq inference (Llama 3.3 70B). Required if Groq selected. |
+| `GEMINI_API_KEY` | Conditional | `""` | API key for Google Gemini Pro. Required if Gemini selected. |
+| `SARVAM_API_KEY` | Optional | `""` | API key for Sarvam AI Indic language models (`sarvam-105b`). |
+| `OPENAI_API_KEY` | Optional | `""` | API key for OpenAI GPT-4o models. |
+| `TAVILY_API_KEY` | Optional | `""` | API key for live internet search & candidate portfolio verification in chat. |
+| `USE_MCP` | Optional | `False` | Toggles Model Context Protocol JSON-RPC `stdio` servers (`True`) vs direct in-process (`False`). |
+| `MCP_TIMEOUT` | Optional | `30.0` | Timeout in seconds for FastMCP JSON-RPC communication. |
+| `OBSERVABILITY_BACKEND`| Optional | `none` | Telemetry backend: `none`, `langfuse`, or `opentelemetry`. |
+| `LANGFUSE_PUBLIC_KEY` | Optional | `""` | Public key for Langfuse APM tracing. |
+| `LANGFUSE_SECRET_KEY` | Optional | `""` | Secret key for Langfuse APM tracing. |
+| `LANGFUSE_HOST` | Optional | `https://cloud.langfuse.com` | Host URL for Langfuse APM dashboard. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`| Optional | `""` | OpenTelemetry OTLP gRPC/HTTP exporter collector URL. |
+| `REDIS_URL` | Optional | `redis://localhost:6379/0` | Redis 7 instance URL for Celery background tasks & caching. |
+| `CELERY_BROKER_URL` | Optional | `redis://localhost:6379/0` | Celery task message broker connection string. |
+| `CELERY_RESULT_BACKEND`| Optional | `redis://localhost:6379/0` | Celery asynchronous task execution result backend. |
+| `EMBEDDING_MODEL` | Optional | `sentence-transformers/all-MiniLM-L6-v2` | Hugging Face dense embedding model for RAG vectorization. |
+| `VECTOR_DB_PATH` | Optional | `./chroma_db` | Filesystem directory for local persistent ChromaDB vectors. |
 
 ### 3. Generate Mock Data & Ingest
 
 ```bash
-# Generate synthetic multi-format candidate resumes (31 profiles: PDF, DOCX, TXT)
+# Generate synthetic multi-format candidate resumes (34 profiles: PDF, DOCX, TXT)
 python -m agentic_profile_matching.generate_dataset
 
 # Chunk, embed, and vector-index candidate profiles into ChromaDB (Idempotent)
@@ -184,6 +280,10 @@ streamlit run src/agentic_profile_matching/app.py
 ```
 
 *Access the dashboard at `http://localhost:8501` to test candidate matching, side-by-side comparisons, and conversational refinement.*
+
+> 💡 **Dedicated Resume Upload Tab**: Ingest custom resumes on the fly via the **📤 Resume Ingestion & Talent Pool** tab. Resumes are processed in-memory (`io.BytesIO`) via PyMuPDF/python-docx without server disk persistence ([ADR-016](docs/adr/ADR-016-zero-disk-in-memory-resume-ingestion.md)).
+>
+> 🎯 **Recommended E2E Test Query**: Try searching `"Search resumes for Python cloud architects with 5+ years experience"`.
 
 ---
 
@@ -204,7 +304,7 @@ docker compose logs -f
 ## 🧪 Testing & Automated Quality Gates
 
 ```bash
-# Run unit and integration test suite (61 tests)
+# Run unit and integration test suite (87 tests)
 pytest tests/ -v
 
 # Run RAG Evaluation Benchmark Suite (Recall@K, MRR & Faithfulness)
@@ -220,7 +320,7 @@ ruff format --check src/ tests/
 ## 📚 Technical Documentation & Deep-Dives
 
 - 🏛️ **[Detailed System Architecture & Specifications](docs/architecture.md)**: Deep dive on dataflow sequences, mathematical scoring formulations, state transitions, and distributed scaling.
-- 📐 **[Formal Architecture Decision Records (ADRs 001–015)](docs/adr/README.md)**: Design context, evaluated alternatives, trade-offs, and consequences.
+- 📐 **[Formal Architecture Decision Records (ADRs 001–016)](docs/adr/README.md)**: Design context, evaluated alternatives, trade-offs, and consequences.
 - 🗺️ **[Implementation Roadmap](docs/ROADMAP.md)**: Phased milestones, completed deliverables, and future backlog.
 - 🛡️ **[Engineering Conventions](docs/CONVENTIONS.md)**: Architectural patterns, Pydantic V2 schemas, error boundaries, and type safety rules.
 - 🤝 **[Contributing Guidelines](CONTRIBUTING.md)**: Local developer workflow, PR conventions, and quality gates.

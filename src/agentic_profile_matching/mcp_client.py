@@ -203,43 +203,78 @@ class MCPClientManager:
             if not self.loop:
                 return
 
-            logger.info("Cleaning up MCP sessions and shutting down background processes...")
+            def _safe_log(level: str, msg: str):
+                try:
+                    import sys
+
+                    if getattr(sys, "stderr", None) is None or getattr(sys.stderr, "closed", False):
+                        return
+                    if getattr(sys, "stdout", None) is None or getattr(sys.stdout, "closed", False):
+                        return
+                    for h in logger.handlers:
+                        if hasattr(h, "stream") and getattr(h.stream, "closed", False):
+                            return
+                    if level == "info":
+                        logger.info(msg)
+                    else:
+                        logger.warning(msg)
+                except Exception:
+                    pass
+
+            _safe_log("info", "Cleaning up MCP sessions and shutting down background processes...")
 
             async def _close_all():
                 for name, session in list(self.sessions.items()):
                     try:
-                        logger.info(f"Closing session for '{name}'...")
+                        _safe_log("info", f"Closing session for '{name}'...")
                         await session.__aexit__(None, None, None)
-                    except Exception as e:
-                        logger.warning(f"Error exiting session '{name}': {e}")
+                    except (Exception, RuntimeError):
+                        pass
 
                 for name, ctx in list(self.contexts.items()):
                     try:
-                        logger.info(f"Exiting stdio transport context for '{name}'...")
+                        _safe_log("info", f"Exiting stdio transport context for '{name}'...")
                         await ctx.__aexit__(None, None, None)
-                    except Exception as e:
-                        logger.warning(f"Error exiting context '{name}': {e}")
+                    except (Exception, RuntimeError):
+                        pass
 
                 self.sessions.clear()
                 self.contexts.clear()
 
             # Schedule close coroutine
-            future = asyncio.run_coroutine_threadsafe(_close_all(), self.loop)
-            try:
-                future.result(timeout=5.0)
-            except Exception as e:
-                logger.warning(f"Timeout or error while closing sessions: {e}")
+            if self.loop.is_running():
+                future = asyncio.run_coroutine_threadsafe(_close_all(), self.loop)
+                try:
+                    future.result(timeout=5.0)
+                except Exception as e:
+                    _safe_log("warning", f"Timeout or error while closing sessions: {e}")
 
-            # Stop the background event loop
-            logger.info("Stopping background asyncio event loop...")
-            self.loop.call_soon_threadsafe(self.loop.stop)
+                # Stop the background event loop
+                _safe_log("info", "Stopping background asyncio event loop...")
+                try:
+                    self.loop.call_soon_threadsafe(self.loop.stop)
+                except Exception:
+                    pass
+            elif not self.loop.is_closed():
+                try:
+                    self.loop.run_until_complete(_close_all())
+                except Exception as e:
+                    _safe_log("warning", f"Error closing sessions on stopped loop: {e}")
+                finally:
+                    try:
+                        self.loop.close()
+                    except Exception:
+                        pass
+            else:
+                self.sessions.clear()
+                self.contexts.clear()
 
             if self.thread:
                 self.thread.join(timeout=3.0)
 
             self.loop = None
             self.thread = None
-            logger.info("MCP client manager successfully stopped.")
+            _safe_log("info", "MCP client manager successfully stopped.")
 
 
 # Singleton Instance
