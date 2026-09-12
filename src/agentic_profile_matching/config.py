@@ -75,7 +75,7 @@ def get_llm_model(provider: str, model_name: str, api_key: str, api_url: Optiona
     if prov == "groq":
         from langchain_groq import ChatGroq
 
-        return ChatGroq(model=model_name, api_key=api_key)
+        return ChatGroq(model=model_name, api_key=api_key)  # type: ignore[arg-type]
     elif prov in ("gemini", "google"):
         from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -85,19 +85,19 @@ def get_llm_model(provider: str, model_name: str, api_key: str, api_url: Optiona
 
         return ChatOpenAI(
             model=model_name,
-            api_key=api_key,
+            api_key=api_key,  # type: ignore[arg-type]
             base_url="https://api.sarvam.ai/v1",
         )
     elif prov == "openai":
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(model=model_name, api_key=api_key)
+        return ChatOpenAI(model=model_name, api_key=api_key)  # type: ignore[arg-type]
     elif "custom" in prov or "openai-compatible" in prov:
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
             model=model_name,
-            api_key=api_key,
+            api_key=api_key,  # type: ignore[arg-type]
             base_url=api_url or "http://localhost:11434/v1",
         )
     else:

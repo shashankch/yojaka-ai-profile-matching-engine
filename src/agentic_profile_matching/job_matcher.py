@@ -170,11 +170,12 @@ class JobMatcher:
         if not tokenized_query:
             tokenized_query = job_description.lower().split()
 
-        bm25_scores = bm25.get_scores(tokenized_query)
-
-        # Normalize BM25 scores
-        max_bm25 = max(bm25_scores) if len(bm25_scores) > 0 else 0
-        normalized_bm25_scores = [s / max_bm25 if max_bm25 > 0 else 0.0 for s in bm25_scores]
+        if bm25 is not None:
+            bm25_scores = bm25.get_scores(tokenized_query)
+            max_bm25 = max(bm25_scores) if len(bm25_scores) > 0 else 0
+            normalized_bm25_scores = [s / max_bm25 if max_bm25 > 0 else 0.0 for s in bm25_scores]
+        else:
+            normalized_bm25_scores = [0.0] * len(documents)
 
         # 3. Hybrid Retrieval & Filtering
         candidate_matches = {}

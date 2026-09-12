@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "chromadb>=1.5.9",
     "sentence-transformers",
-    "pypdf",
+    "pypdf>=6.16.1",
     "pymupdf",
     "python-docx",
     "rank-bm25",
@@ -56,5 +56,11 @@ ignore = ["E501", "W293"]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
 markers = ["eval: RAG evaluation pipeline benchmark tests"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_configs = true
+
 
 
