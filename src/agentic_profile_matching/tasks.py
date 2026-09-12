@@ -1,8 +1,9 @@
 from typing import Dict, Any, Optional
+from agentic_profile_matching import config
 from agentic_profile_matching.celery_app import celery_app
 from agentic_profile_matching.services.ingestion_service import IngestionService
 from agentic_profile_matching.fs_client import read_file
-from agentic_profile_matching.tools import parse_json_output, DeepScreenOutput, execute_with_retry
+from agentic_profile_matching.tools import invoke_structured, DeepScreenOutput, execute_with_retry
 from agentic_profile_matching.agent.prompts import DEEP_SCREEN_SYSTEM_PROMPT
 from agentic_profile_matching.agent.nodes import _get_llm
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -40,6 +41,10 @@ def async_deep_screen_candidate(
         }
 
     resume_text = res["content"]
+    # Truncate content to avoid token exhaustion
+    if len(resume_text) > config.RESUME_TRUNCATION_LIMIT:
+        resume_text = resume_text[: config.RESUME_TRUNCATION_LIMIT] + "... [truncated]"
+
     prompt_content = f"""Candidate: {candidate_name}
 Job Title: {requirements.get("title", "Software Engineer")}
 Must-Have Skills: {requirements.get("must_have_skills", [])}
@@ -58,8 +63,7 @@ Resume Content:
                 SystemMessage(content=DEEP_SCREEN_SYSTEM_PROMPT),
                 HumanMessage(content=prompt_content),
             ]
-            response = llm.invoke(messages)
-            return parse_json_output(response.content, model_cls=DeepScreenOutput)
+            return invoke_structured(llm, messages, DeepScreenOutput)
 
         result = execute_with_retry(_call)
         result["candidate_id"] = candidate_id

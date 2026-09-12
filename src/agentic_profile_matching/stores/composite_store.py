@@ -111,5 +111,14 @@ class CompositeVectorStore:
         ids: Optional[List[str]] = None,
         where: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Delete from the ephemeral store."""
-        self.ephemeral_store.delete(ids=ids, where=where)
+        """Delete from ephemeral and base stores where matching."""
+        if hasattr(self.ephemeral_store, "delete"):
+            try:
+                self.ephemeral_store.delete(ids=ids, where=where)
+            except Exception as e:
+                logger.debug(f"Ephemeral delete failed: {e}")
+        if hasattr(self.base_store, "delete"):
+            try:
+                self.base_store.delete(ids=ids, where=where)
+            except Exception as e:
+                logger.debug(f"Base delete failed: {e}")

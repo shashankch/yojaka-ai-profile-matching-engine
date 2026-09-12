@@ -13,6 +13,9 @@ from agentic_profile_matching.stores import BaseVectorStore, ChromaVectorStore
 logger = get_logger("agentic_profile_matching.job_matcher")
 
 
+_EMBEDDER_CACHE: Dict[str, SentenceTransformer] = {}
+
+
 class JobMatcher:
     def __init__(
         self,
@@ -22,7 +25,9 @@ class JobMatcher:
     ):
         self.store = store or ChromaVectorStore(collection_name=collection_name)
         self.model_name = model_name or config.EMBEDDING_MODEL
-        self.embedder = SentenceTransformer(self.model_name)
+        if self.model_name not in _EMBEDDER_CACHE:
+            _EMBEDDER_CACHE[self.model_name] = SentenceTransformer(self.model_name)
+        self.embedder = _EMBEDDER_CACHE[self.model_name]
 
         # Cache attributes for BM25 Okapi index
         self._cached_bm25: Optional[BM25Okapi] = None
