@@ -84,19 +84,39 @@ This document outlines the strategic milestones for **Yojaka AI (Agentic Profile
 - **15.6 — Progressive Checkpoint Indicators & Non-Duplicative Error Fallbacks**: Live progressive `st.status` node execution checkpoints with safe partial-progress error handling preventing duplicate re-invocations.
 - **15.7 — Stateless Credential Isolation (CWE-312)**: Isolated credentials within `RunnableConfig` eliminating API secret leakage into checkpoints, with provider-specific environment key mapping (`GROQ_API_KEY`, `GEMINI_API_KEY`, `SARVAM_API_KEY`, `OPENAI_API_KEY`) ([ADR-011](adr/ADR-011-stateless-credential-isolation.md)).
 - **15.8 — Brand Modernization**: Rebranded to **Yojaka AI (Agentic Profile Matching Engine)**.
-- **15.10 — LLM-Driven Intent Routing, Dynamic Anchors & Semantic Caching**: Re-architected `route_input` in `agent/routers.py` into a modern 2026 LLM-driven router (`_classify_via_llm` as primary authority), completely eliminating static hardcoded anchor dictionaries and keyword arrays; added dynamic LLM anchor synthesis (`generate_dynamic_intent_anchors`), in-memory LRU query routing cache (`_ROUTING_CACHE`) for $0\text{ms}$ repeated queries, case-insensitive provider resolution in `config.py`, and direct in-process tool fallbacks in `nodes.py` ([ADR-009](adr/ADR-009-tiered-semantic-embedding-intent-routing.md)).
+- **15.9 — LLM-Driven Intent Routing, Dynamic Anchors & Semantic Caching**: Re-architected `route_input` in `agent/routers.py` into a modern 2026 LLM-driven router (`_classify_via_llm` as primary authority), completely eliminating static hardcoded anchor dictionaries and keyword arrays; added dynamic LLM anchor synthesis (`generate_dynamic_intent_anchors`), in-memory LRU query routing cache (`_ROUTING_CACHE`) for $0\text{ms}$ repeated queries, case-insensitive provider resolution in `config.py`, and direct in-process tool fallbacks in `nodes.py` ([ADR-009](adr/ADR-009-tiered-semantic-embedding-intent-routing.md)).
+- **15.10 — Streamlit UI Ergonomics, Zero-Scroll Affordances, Cold-Start Path Resilience & Search Gateway**: Streamlined sidebar layout with compact metric badges eliminating vertical scrolling to reveal active constraints; client-friendly upload instructions without technical jargon; hardened repository-root path resolution (`BASE_DIR`/`DATA_DIR`/`RESUMES_DIR`) auto-discovering all 34 pre-loaded profiles on fresh browser sessions; integrated optional sidebar Tavily search API key with automatic fallback to DuckDuckGo; and downward expander affordances (`▾`).
 
 ---
 
-## 🚀 Future Backlog
+## 🚀 Future Milestones (Phases 16–20)
 
-- **Ephemeral S3 Signed URL Staging**: Pre-signed S3 bucket staging with automated lifecycle expiration for high-volume enterprise uploads.
-- **Edge WASM Client-Side Vector Ingestion**: In-browser client-side document parsing and embedding vector generation via WebAssembly sandbox.
-- **Reversible PII Anonymization & Redaction Vault**: Tokenized privacy vault masking personal identifiers (`[CANDIDATE_A]`) with deanonymization keys.
-- **Indirect Prompt Injection Sanitizer**: Pre-screening heuristic and LLM scanner filtering adversarial prompt injection attempts in resume content.
-- **Semantic Embedding Cache**: Redis-backed semantic vector query cache ($< 10\text{ms}$).
-- **Multi-Agent Consensus Loop**: Independent Technical Architect and HR Sourcing screener debate before recommendation.
-- **Bias & Fairness Auditing**: Automated inclusivity auditing for job descriptions and screening assessments.
+### Phase 16: Presentation Layer Modularization, Streamlit-Native Streaming & Headless API Sidecar
+- **16.1 — Modular UI Decomposition**: Extract monolithic `app.py` into testable `ui/` components (`styles.py`, `session.py`, `chat.py`, `talent_pool.py`, `cards.py`, `matrix.py`).
+- **16.2 — Streamlit-Native Streaming & Tool Visibility**: Live token-by-token streaming via `st.write_stream` and intra-node tool call progress badges via `st.status` collapsible traces.
+- **16.3 — Headless FastAPI Sidecar Gateway**: Additive ASGI server (`api/`) exposing SSE streaming endpoints (`/api/v1/stream`) for CI pipelines and headless integrations while preserving Streamlit intact.
+
+### Phase 17: Layout-Aware Section Parsing, Contextual Retrieval & Two-Stage Reranking
+- **17.1 — Hierarchical Resume Section Chunking**: Layout-aware chunking preserving section hierarchy (Work Experience, Skills, Education).
+- **17.2 — Contextual Retrieval Prepending**: Document-level context prepended to each chunk before embedding to prevent isolated fragment drift.
+- **17.3 — Cross-Encoder Two-Stage Reranking**: FlashRank / BGE-Reranker cross-encoder pass on top-20 retrieved candidates before LLM deep-screening.
+
+### Phase 18: Agent Topology, Calibrated Margin Routing & LangGraph Native Commands
+- **18.1 — Calibrated Confidence & Margin Routing**: Softmax margin scoring over embedding distances to dynamically trigger LLM router verification only when ambiguous ($\Delta < 0.15$).
+- **18.2 — LangGraph Native Command Architecture**: Migrate node state routing to LangGraph `Command(goto=...)` primitives for dynamic graph traversal.
+- **18.3 — Parallel Dual-Rubric Structured Evaluation**: Replace slow multi-turn conversational debate with parallel dual-rubric scoring (Technical Architecture Competence vs HR Sourcing & Domain Fit), avoiding 3x latency bloat while delivering balanced committee scorecards.
+
+### Phase 19: Enterprise Multi-Tenancy, Zero-Trust PII Vault & Security Guardrails
+- **19.1 — Reversible Zero-Trust PII Tokenization Vault**: Pre-screening redaction replacing candidate names, emails, and phone numbers with cryptographic tokens (`[CANDIDATE_A]`), enforcing enterprise data privacy standards and objective blind hiring meritocracy.
+- **19.2 — Tenant-Isolated Collection Namespaces**: Multi-tenant namespace isolation across vector stores and session checkpoints.
+- **19.3 — Adversarial Prompt Injection Sanitizer**: Ingestion heuristics, invisible character filters, and LLM guardrails intercepting indirect prompt injection payloads hidden inside uploaded resume files (OWASP Top 10 for LLMs - LLM01).
+- **19.4 — Cloud ATS Batch Staging Adapter (Optional)**: Pre-signed S3/Blob storage adapter with automated lifecycle expiration for asynchronous multi-thousand resume batch uploads from enterprise ATS platforms (Workday, Greenhouse).
+
+### Phase 20: Unit Economics, Semantic Caching & Continuous CI/CD Evals
+- **20.1 — Semantic Query & Routing Cache with Pool Hash Invalidation**: Sub-10ms response cache for semantically equivalent recruiter search queries and intent routes, with pool-version hash invalidation preventing stale candidate ranking lists.
+- **20.2 — Bias, Fairness & Inclusivity Auditing**: Automated linguistic inclusivity scanner auditing job descriptions for exclusionary phrasing, coupled with demographic score parity auditing for global regulatory compliance.
+- **20.3 — Granular Cost & Token Budgeting**: Real-time per-query and per-tenant cost accounting and token quota enforcement.
+- **20.4 — Automated Continuous Evaluation Gate in CI**: Automated RAG Triad benchmarks (Context Precision, Recall@K, Faithfulness) blocking pull requests on score regression.
 
 ---
 

@@ -122,10 +122,9 @@ class TestMCPIntegration(unittest.TestCase):
         config.USE_MCP = self.original_use_mcp
 
         # Clean up sandbox
-        if self.test_file.exists():
-            self.test_file.unlink()
-        if self.test_dir.exists():
-            self.test_dir.rmdir()
+        import shutil
+
+        shutil.rmtree(self.test_dir, ignore_errors=True)
 
     # ------------------------------------------------------------------
     # 1. Local-mode routing (always fast, no subprocess)

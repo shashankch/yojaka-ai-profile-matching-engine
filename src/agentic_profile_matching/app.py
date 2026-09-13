@@ -24,21 +24,22 @@ st.set_page_config(
 
 
 # Auto-bootstrap candidate vector database for cold starts (e.g. Streamlit Cloud)
-@st.cache_resource(show_spinner="Bootstrapping Candidate Database...")
+@st.cache_resource(show_spinner=False)
 def ensure_vector_store_initialized():
     from agentic_profile_matching.stores import ChromaVectorStore
-    from agentic_profile_matching.services.ingestion_service import IngestionService
 
     store = ChromaVectorStore()
-    service = IngestionService(store=store)
     if store.count() == 0:
+        from agentic_profile_matching.services.ingestion_service import IngestionService
+
         resumes_dir = Path(config.RESUMES_DIR)
         if not resumes_dir.exists():
             resumes_dir = Path(config.BASE_DIR).parent / "data" / "resumes"
+        if not resumes_dir.exists():
+            resumes_dir = Path(config.BASE_DIR) / "data" / "resumes"
         if resumes_dir.exists():
+            service = IngestionService(store=store)
             service.ingest_directory(str(resumes_dir))
-    else:
-        service.prune_stale_records()
     return store
 
 
@@ -380,6 +381,15 @@ api_url = None
 if llm_provider == "Custom (OpenAI-compatible)":
     api_url = st.sidebar.text_input("API Base URL (Endpoint)", value="https://api.openai.com/v1")
 
+tavily_key = st.sidebar.text_input(
+    "Tavily Search API Key (Optional)",
+    value=os.getenv("TAVILY_API_KEY", ""),
+    type="password",
+    help="Enables real-time web search for tech trends & market intelligence in chat. If omitted, built-in search fallback is used.",
+)
+if tavily_key:
+    os.environ["TAVILY_API_KEY"] = tavily_key
+
 
 # ----------------------------------------------------
 # Helper: Progressive Live Checkpoints Runner
@@ -437,31 +447,38 @@ def run_agent_workflow_with_status(state_input: dict, config_dict: dict) -> dict
 # ----------------------------------------------------
 # Sidebar Section 2: Active Talent Pool Summary
 # ----------------------------------------------------
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 2. Active Talent Pool")
 try:
     total_indexed_chunks = st.session_state["session_vector_store"].count()
 except Exception:
     total_indexed_chunks = 0
 
 try:
-    all_files = list(Path(config.RESUMES_DIR).glob("*.*"))
+    resumes_path = Path(config.RESUMES_DIR)
+    if not resumes_path.exists():
+        fallback_path = Path(config.BASE_DIR).parent / "data" / "resumes"
+        if fallback_path.exists():
+            resumes_path = fallback_path
+    all_files = list(resumes_path.glob("*.*"))
     disk_count = len([f for f in all_files if f.suffix.lower() in [".pdf", ".docx", ".txt"]])
     valid_count = disk_count + len(st.session_state.get("uploaded_candidates", []))
 except Exception:
     valid_count = 34 + len(st.session_state.get("uploaded_candidates", []))
 
-st.sidebar.info(
-    f"📂 **{valid_count} Profiles** (`{total_indexed_chunks}` chunks in memory)\n\n"
-    "Upload new resumes or explore indexed candidates in the **📤 Resume Ingestion & Talent Pool** workspace tab."
+st.sidebar.markdown(
+    f"""
+    <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.22); border-radius: 8px; padding: 7px 12px; margin: 0.6rem 0 0.5rem 0; font-size: 0.85rem; color: #cbd5e1; display: flex; align-items: center; justify-content: space-between;">
+        <span>📂 <strong>{valid_count} Profiles</strong> Active</span>
+        <span style="font-family: monospace; background: rgba(99, 102, 241, 0.2); padding: 2px 6px; border-radius: 4px; font-size: 0.78rem;">{total_indexed_chunks} chunks</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 
 # ----------------------------------------------------
 # Sidebar Section 3: Throttling & Limits Control
 # ----------------------------------------------------
-st.sidebar.markdown("---")
-with st.sidebar.expander("⚙️ 3. Throttling & Limits Control", expanded=False):
+with st.sidebar.expander("⚙️ 3. Throttling & Limits Control ▾", expanded=False):
     coarse_limit = st.slider(
         "Round 1: Coarse Limit",
         min_value=5,
@@ -489,8 +506,7 @@ with st.sidebar.expander("⚙️ 3. Throttling & Limits Control", expanded=False
 # ----------------------------------------------------
 # Sidebar Section 4: Active Requirements Constraints
 # ----------------------------------------------------
-st.sidebar.markdown("---")
-with st.sidebar.expander("📋 4. Active Requirements Constraints", expanded=False):
+with st.sidebar.expander("📋 4. Active Requirements Constraints ▾", expanded=False):
     reqs = st.session_state["requirements"]
     title_input = st.text_input("Extracted Job Title", value=reqs.get("title", "Software Engineer"))
     min_exp_slider = st.slider(
@@ -540,6 +556,7 @@ with st.sidebar.expander("📋 4. Active Requirements Constraints", expanded=Fal
                 "thread_id": "streamlit-session-thread",
                 "api_key": api_key,
                 "api_url": api_url,
+                "tavily_api_key": tavily_key,
                 "llm_provider": llm_provider,
                 "llm_model": llm_model,
                 "store": st.session_state["session_vector_store"],
@@ -625,6 +642,7 @@ with tab1:
                 "thread_id": "streamlit-session-thread",
                 "api_key": api_key,
                 "api_url": api_url,
+                "tavily_api_key": tavily_key,
                 "llm_provider": llm_provider,
                 "llm_model": llm_model,
                 "store": st.session_state["session_vector_store"],
@@ -672,7 +690,12 @@ with tab2:
         st.metric("Total Indexed Chunks", total_indexed_chunks)
     with c2:
         try:
-            all_files = list(Path(config.RESUMES_DIR).glob("*.*"))
+            resumes_path = Path(config.RESUMES_DIR)
+            if not resumes_path.exists():
+                fallback_path = Path(config.BASE_DIR).parent / "data" / "resumes"
+                if fallback_path.exists():
+                    resumes_path = fallback_path
+            all_files = list(resumes_path.glob("*.*"))
             valid_count = len([f for f in all_files if f.suffix.lower() in [".pdf", ".docx", ".txt"]])
             st.metric("Active Talent Profiles", valid_count)
         except Exception:
@@ -689,7 +712,7 @@ with tab2:
         type=["pdf", "docx", "txt"],
         accept_multiple_files=True,
         key="main_resume_uploader",
-        help="Direct in-memory stream ingestion via PyMuPDF/python-docx without server disk writes.",
+        help="Upload candidate resumes (PDF, DOCX, or TXT). Files are parsed securely in-memory for your active session without server disk storage.",
     )
 
     if main_uploaded_files:

@@ -86,30 +86,34 @@ class IngestionService:
             f"Exp: {meta['experience_years']} yrs, Skills: {len(meta['skills'])}, Chunks: {len(chunks)}"
         )
 
-        added_chunks = 0
         pipeline = self.pipeline
+        contents = [ch["content"] for ch in chunks]
+        embeddings = pipeline.embedder.encode(contents, batch_size=32).tolist()
+        chunk_ids = []
+        chunk_metas = []
 
         for idx, ch in enumerate(chunks):
-            emb = pipeline.embedder.encode(ch["content"]).tolist()
             section_clean = ch["section"].lower().replace(" ", "_")
-            chunk_id = f"{filename}_{section_clean}_{idx}"
-            chunk_meta = {
-                "candidate_name": meta["candidate_name"],
-                "skills": ", ".join(meta["skills"]),
-                "experience_years": int(meta["experience_years"]),
-                "education": meta["education"],
-                "resume_path": str(path),
-                "filename": filename,
-                "section": ch["section"],
-            }
-
-            pipeline.store.upsert(
-                ids=[chunk_id],
-                documents=[ch["content"]],
-                embeddings=[emb],
-                metadatas=[chunk_meta],
+            chunk_ids.append(f"{filename}_{section_clean}_{idx}")
+            chunk_metas.append(
+                {
+                    "candidate_name": meta["candidate_name"],
+                    "skills": ", ".join(meta["skills"]),
+                    "experience_years": int(meta["experience_years"]),
+                    "education": meta["education"],
+                    "resume_path": str(path),
+                    "filename": filename,
+                    "section": ch["section"],
+                }
             )
-            added_chunks += 1
+
+        pipeline.store.upsert(
+            ids=chunk_ids,
+            documents=contents,
+            embeddings=embeddings,
+            metadatas=chunk_metas,
+        )
+        added_chunks = len(chunks)
 
         return {
             "success": True,
@@ -238,28 +242,34 @@ class IngestionService:
         except Exception as e:
             logger.debug(f"Could not prune prior chunks for {filename}: {e}")
 
-        for idx, ch in enumerate(chunks):
-            emb = pipeline.embedder.encode(ch["content"]).tolist()
-            section_clean = ch["section"].lower().replace(" ", "_")
-            chunk_id = f"stream_{filename}_{content_hash}_{section_clean}_{idx}"
-            chunk_meta = {
-                "candidate_name": meta["candidate_name"],
-                "skills": ", ".join(meta["skills"]),
-                "experience_years": int(meta["experience_years"]),
-                "education": meta["education"],
-                "resume_path": resume_ref,
-                "filename": filename,
-                "content_hash": content_hash,
-                "section": ch["section"],
-            }
+        contents = [ch["content"] for ch in chunks]
+        embeddings = pipeline.embedder.encode(contents, batch_size=32).tolist()
+        chunk_ids = []
+        chunk_metas = []
 
-            pipeline.store.upsert(
-                ids=[chunk_id],
-                documents=[ch["content"]],
-                embeddings=[emb],
-                metadatas=[chunk_meta],
+        for idx, ch in enumerate(chunks):
+            section_clean = ch["section"].lower().replace(" ", "_")
+            chunk_ids.append(f"stream_{filename}_{content_hash}_{section_clean}_{idx}")
+            chunk_metas.append(
+                {
+                    "candidate_name": meta["candidate_name"],
+                    "skills": ", ".join(meta["skills"]),
+                    "experience_years": int(meta["experience_years"]),
+                    "education": meta["education"],
+                    "resume_path": resume_ref,
+                    "filename": filename,
+                    "content_hash": content_hash,
+                    "section": ch["section"],
+                }
             )
-            added_chunks += 1
+
+        pipeline.store.upsert(
+            ids=chunk_ids,
+            documents=contents,
+            embeddings=embeddings,
+            metadatas=chunk_metas,
+        )
+        added_chunks = len(chunks)
 
         return {
             "success": True,

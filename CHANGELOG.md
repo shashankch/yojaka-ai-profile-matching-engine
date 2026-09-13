@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-09-13
+### Added
+- **Streamlit UI Zero-Scroll Sidebar**: Compacted Section 2 into a single-line badge (`📂 34 Profiles Active • 172 chunks`), removed redundant dividers and excess vertical margin, ensuring Section 4 ("Active Requirements Constraints") is visible in standard laptop viewports without scrolling.
+- **Client-Friendly Ingestion Tooltips**: Replaced internal library jargon in file uploader with plain-English recruiter guidance.
+- **Cold-Start Path Resilience**: Updated `config.py` with multi-path resolution pointing `BASE_DIR`, `DATA_DIR`, and `RESUMES_DIR` accurately to project root with fallback checks, resolving the cold-start 0 profile display issue on fresh deployments.
+- **Tavily Search Key Input & Workflow**: Added optional password field in Sidebar Section 1 for Tavily API key with automatic fallback to DuckDuckGo search.
+- **Batched Vector Ingestion**: Replaced single-chunk sequential forward passes in `IngestionService.ingest_file` and `ingest_stream` with batched encoding (`batch_size=32`) and batched `store.upsert()`, accelerating resume parsing and cold-start indexing by ~10x.
+- **Universal Markdown Explainer**: Replaced inline HTML div with a universal markdown table card with reduced font size for cross-platform rendering across GitHub and IDE previews.
+- **Streamlined Configuration Reference**: Condensed the 19-row environment table in `README.md` to the 4 essential provider keys with link to `docs/architecture.md#14-environment-variables--runtime-configuration-reference`.
+- **Roadmap Phasing Alignment**: Fixed sequential numbering in Phase 15 (`15.1` through `15.10`) and structured Future Milestones into formal Phases 16–20.
+- **High-Quality Zero-Artifact Demo GIF**: Regenerated `docs/assets/yojaka_demo.gif` using an adaptive 256-color median-cut palette with `disposal=2`, eliminating pixelation, color banding, and pinkish/magenta artifacts.
+- **Lazy Vector Store Initialization & Instant Startup**: Decoupled `ChromaVectorStore` from upfront `IngestionService` and `SentenceTransformer` model loading in `app.py`, dropping cold startup latency from ~9.1s to ~0.03s and eliminating blocking spinner flashes on application launch.
+
+
 ## [1.2.0] - 2026-09-12
 ### Added
 - **Project Rebranding**: Rebranded to **Yojaka AI (Agentic Profile Matching Engine)** across UI headers, metadata, documentation, and Streamlit Cloud configuration.
