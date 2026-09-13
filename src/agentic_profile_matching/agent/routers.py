@@ -19,11 +19,11 @@ class RouteDecision(BaseModel):
 # Rich Semantic Intent Signatures used as baseline vector centroids for zero-shot embedding routing
 DEFAULT_INTENT_DESCRIPTIONS: Dict[str, List[str]] = {
     "extract_requirements": [
-        "Search for candidates, source resumes, find developers, engineers, and technical talent.",
+        "Search resumes for candidates, source developers, engineers, and technical talent.",
         "Extract skills, qualifications, and requirements from job descriptions for hiring.",
         "Find or match candidates matching job requirements, tech stack, and experience.",
-        "Looking for a full stack developer with React and Node.js or backend engineers.",
-        "Search for candidates with Java and Python experience.",
+        "Looking to hire a full stack developer with React and Node.js or backend engineers.",
+        "Search resumes for candidates with Java and Python experience.",
     ],
     "adjust_requirements": [
         "Adjust, modify, update, tighten, or relax existing skill requirements and constraints.",
@@ -33,11 +33,12 @@ DEFAULT_INTENT_DESCRIPTIONS: Dict[str, List[str]] = {
         "Filter by degree, update job title, or refine constraints on current search.",
     ],
     "conversational_query": [
-        "Ask general technical questions, software engineering concepts, or industry technology trends.",
-        "Perform an internet search, search Google, browse the web, or check online documentation.",
+        "Search google for latest tech trends and python release features.",
+        "Perform an internet search, search Google, search the web, or check online documentation.",
         "Compare active candidates, analyze candidate differences, or explain ranking scores and notes.",
         "Why is candidate Alice ranked higher than Bob?",
         "Tell me about graph engineering in 2026.",
+        "What is LangGraph and how does multi-agent orchestration work?",
         "Greetings, assistant capabilities, help, or conversational questions.",
     ],
 }
@@ -297,24 +298,37 @@ def route_input(state: AgentState) -> str:
     ):
         return "extract_requirements"
 
+    # 2. Fast-Path: Explicit Web & Internet Search Intent
+    if any(
+        lower_msg.startswith(prefix)
+        for prefix in [
+            "search google",
+            "search the web",
+            "search online",
+            "search internet",
+            "google ",
+        ]
+    ):
+        return "conversational_query"
+
     has_requirements = bool(state.get("requirements"))
     has_shortlist = bool(state.get("shortlist", []))
 
-    # 2. In-Memory Cache Lookup (0ms sub-millisecond execution for repeated queries)
+    # 3. In-Memory Cache Lookup (0ms sub-millisecond execution for repeated queries)
     cache_key = (lower_msg, has_requirements, has_shortlist)
     if cache_key in _ROUTING_CACHE:
         cached_intent = _ROUTING_CACHE[cache_key]
         logger.debug(f"Resolved intent from routing cache: {cached_intent}")
         return cached_intent
 
-    # 3. Primary Tier: LLM Structured Intent Classifier
+    # 4. Primary Tier: LLM Structured Intent Classifier
     llm_intent = _classify_via_llm(state)
     if llm_intent:
         _ROUTING_CACHE[cache_key] = llm_intent
         return llm_intent
 
-    # 4. Secondary Tier: Local Semantic Embedding Router with Dynamic Intent Prototypes
-    semantic_intent = _classify_via_semantic_similarity(last_msg, confidence_threshold=0.20)
+    # 5. Secondary Tier: Local Semantic Embedding Router with Dynamic Intent Prototypes
+    semantic_intent = _classify_via_semantic_similarity(last_msg, confidence_threshold=0.35)
     if semantic_intent:
         if semantic_intent == "adjust_requirements" and not has_requirements:
             semantic_intent = "extract_requirements"
