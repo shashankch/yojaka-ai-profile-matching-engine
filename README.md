@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://yojaka-ai-job-profile-matching-engine.streamlit.app/"><img src="https://static.streamlit.io/badges/streamlit_badge_black_white.svg" alt="Streamlit App"></a>
   <a href="https://github.com/shashankch/yojaka-ai-profile-matching-engine/actions/workflows/ci.yml"><img src="https://github.com/shashankch/yojaka-ai-profile-matching-engine/actions/workflows/ci.yml/badge.svg" alt="Python CI"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.2.0-blue.svg" alt="Version: v1.2.0"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.2.1-blue.svg" alt="Version: v1.2.1"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue.svg" alt="Python Version"></a>
   <a href="docs/adr/README.md"><img src="https://img.shields.io/badge/ADRs-16%20Accepted-teal.svg" alt="Architecture Decision Records"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Linter: Ruff"></a>
@@ -18,17 +18,16 @@
   <strong>An interactive AI Recruiter & Profile Matching Engine built with LangGraph, Hybrid RAG (Semantic Vector + BM25 Okapi), Dynamic Semantic Skill Expansion, Zero-Disk In-Memory Upload, and Model Context Protocol (MCP).</strong>
 </p>
 
-<div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%); border: 1px solid rgba(129, 140, 248, 0.25); border-radius: 12px; padding: 16px 24px; margin: 20px auto; max-width: 860px; text-align: center;">
-  <p style="margin: 0; font-size: 1.02rem; line-height: 1.65; color: #cbd5e1;">
-    In classical Sanskrit, <strong>योजक (Yojaka)</strong> derives from the root <em>युज् (yuj)</em> — meaning <em>to connect, unite, align, or orchestrate</em>. Rather than treating candidate vetting as a cold keyword gatekeeper, <strong>Yojaka AI</strong> operates as an intelligent orchestrator: parsing unstructured human potential, dynamically expanding semantic equivalences, and cascading through structured reasoning to match talent with purpose.
-  </p>
 </div>
+
+| 💡 **What is Yojaka (योजक)?** |
+| :--- |
+| <small>In classical Sanskrit, <b>योजक (Yojaka)</b> derives from the root <i>युज् (yuj)</i> — meaning <i>to connect, unite, align, or orchestrate</i>. Rather than treating candidate vetting as a cold keyword gatekeeper, <b>Yojaka AI</b> operates as an intelligent orchestrator: parsing unstructured human potential, dynamically expanding semantic equivalences, and cascading through structured reasoning to match talent with purpose.</small> |
+
 
 <p align="center">
   <img src="docs/assets/yojaka_demo.gif" alt="Yojaka AI End-to-End Walkthrough Demo" width="94%" style="border-radius: 8px; border: 1px solid #334155; box-shadow: 0 8px 30px rgba(0,0,0,0.18);">
 </p>
-
-</div>
 
 ---
 
@@ -205,23 +204,10 @@ cp .env.example .env
 |:---|:---:|:---|:---|
 | `GROQ_API_KEY` | Conditional | `""` | API key for Groq inference (Llama 3.3 70B, free-tier fast default). |
 | `GEMINI_API_KEY` | Conditional | `""` | API key for Google Gemini 2.0 Pro / Flash. |
-| `SARVAM_API_KEY` | Optional | `""` | API key for Sarvam AI Indic language models (`sarvam-105b`). |
+| `TAVILY_API_KEY` | Optional | `""` | Real-time web search for tech trends & company intelligence in chat. |
 | `OPENAI_API_KEY` | Optional | `""` | API key for OpenAI GPT-4o models. |
-| `TAVILY_API_KEY` | Optional | `""` | Real-time web search for tech trends & candidate portfolio verification in chat. |
-| `USE_MCP` | Optional | `False` | Toggles FastMCP JSON-RPC `stdio` servers (`True`) vs direct in-process (`False`). |
-| `MCP_TIMEOUT` | Optional | `30.0` | Timeout in seconds for FastMCP JSON-RPC communication. |
-| `OBSERVABILITY_BACKEND`| Optional | `none` | Telemetry backend: `none`, `langfuse`, or `opentelemetry`. |
-| `LANGFUSE_PUBLIC_KEY` | Optional | `""` | Public key for Langfuse APM tracing. |
-| `LANGFUSE_SECRET_KEY` | Optional | `""` | Secret key for Langfuse APM tracing. |
-| `LANGFUSE_HOST` | Optional | `https://cloud.langfuse.com` | Host URL for Langfuse APM dashboard. |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`| Optional | `""` | OpenTelemetry OTLP gRPC/HTTP exporter collector URL. |
-| `REDIS_URL` | Optional | `redis://localhost:6379/0` | Redis 7 instance URL for Celery background tasks & caching. |
-| `CELERY_BROKER_URL` | Optional | `redis://localhost:6379/0` | Celery task message broker connection string. |
-| `CELERY_RESULT_BACKEND`| Optional | `redis://localhost:6379/0` | Celery asynchronous task execution result backend. |
-| `EMBEDDING_MODEL` | Optional | `sentence-transformers/all-MiniLM-L6-v2` | Hugging Face dense embedding model for RAG vectorization. |
-| `VECTOR_DB_PATH` | Optional | `./chroma_db` | Filesystem directory for local persistent ChromaDB vectors. |
 
-> 💡 *See [`.env.example`](.env.example) for a pre-configured template and [Architecture Section 14](docs/architecture.md#14-environment-variables--runtime-configuration-reference) for runtime configuration semantics.*
+> 💡 *For the complete 20-variable reference including Langfuse, OpenTelemetry, Redis/Celery, and FastMCP options, see [Architecture Section 14 (Runtime Configuration)](docs/architecture.md#14-environment-variables--runtime-configuration-reference) and [`.env.example`](.env.example).*
 
 ### 3. Generate Mock Data & Ingest
 

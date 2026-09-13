@@ -7,9 +7,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Base Paths
-BASE_DIR = Path(__file__).resolve().parent.parent
-VECTOR_DB_PATH = os.getenv("VECTOR_DB_PATH", str(BASE_DIR / "chroma_db"))
-DATA_DIR = Path(os.getenv("DATA_DIR", str(BASE_DIR / "data")))
+PACKAGE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = PACKAGE_DIR.parent.parent
+BASE_DIR = PROJECT_ROOT if (PROJECT_ROOT / "data").exists() else PACKAGE_DIR.parent
+VECTOR_DB_PATH = os.getenv("VECTOR_DB_PATH", str(PROJECT_ROOT / "chroma_db"))
+DATA_DIR = Path(
+    os.getenv(
+        "DATA_DIR",
+        str(PROJECT_ROOT / "data" if (PROJECT_ROOT / "data").exists() else BASE_DIR / "data"),
+    )
+)
 RESUMES_DIR = os.getenv("RESUMES_DIR", str(DATA_DIR / "resumes"))
 JOB_DESCRIPTIONS_DIR = os.getenv("JOB_DESCRIPTIONS_DIR", str(DATA_DIR / "job_descriptions"))
 
@@ -46,11 +53,11 @@ RESUME_TRUNCATION_LIMIT = int(os.getenv("RESUME_TRUNCATION_LIMIT", "12000"))
 USE_MCP = os.getenv("USE_MCP", "False").lower() in ("true", "1", "yes")
 FILESYSTEM_SERVER_PATH = os.getenv(
     "FILESYSTEM_SERVER_PATH",
-    str(BASE_DIR / "agentic_profile_matching" / "filesystem_mcp_server.py"),
+    str(PACKAGE_DIR / "filesystem_mcp_server.py"),
 )
 SEARCH_SERVER_PATH = os.getenv(
     "SEARCH_SERVER_PATH",
-    str(BASE_DIR / "agentic_profile_matching" / "search_mcp_server.py"),
+    str(PACKAGE_DIR / "search_mcp_server.py"),
 )
 MCP_TIMEOUT = float(os.getenv("MCP_TIMEOUT", "30.0"))
 

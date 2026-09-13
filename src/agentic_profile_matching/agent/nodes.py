@@ -793,6 +793,11 @@ def conversational_query_node(state: AgentState, config: Optional[RunnableConfig
     shortlist = state.get("shortlist", [])
     requirements = state.get("requirements", {})
 
+    configurable = config.get("configurable", {}) if config else {}
+    tavily_key = configurable.get("tavily_api_key")
+    if tavily_key:
+        os.environ["TAVILY_API_KEY"] = tavily_key
+
     llm = _get_llm(state, config)
 
     logger.info(f"Executing Conversational Query with search tools: '{last_msg}'")
