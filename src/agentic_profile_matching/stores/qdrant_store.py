@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger("qdrant_store")
 
@@ -56,3 +56,21 @@ class QdrantVectorStore:
 
     def count(self) -> int:
         return len(self._storage)
+
+    def delete(
+        self,
+        ids: Optional[List[str]] = None,
+        where: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if ids:
+            for item_id in ids:
+                self._storage.pop(item_id, None)
+        if where:
+            to_remove = []
+            for item_id, item in self._storage.items():
+                meta = item.get("metadata", {})
+                matches = all(meta.get(k) == v for k, v in where.items())
+                if matches:
+                    to_remove.append(item_id)
+            for item_id in to_remove:
+                self._storage.pop(item_id, None)

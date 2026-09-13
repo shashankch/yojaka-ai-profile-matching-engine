@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic_profile_matching"
-version = "1.1.0"
-description = "Production-grade Agentic Profile Matching Engine"
+version = "1.2.0"
+description = "Yojaka AI: Production-grade Agentic Profile Matching Engine"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "chromadb>=1.5.9",
     "sentence-transformers",
-    "pypdf",
+    "pypdf>=6.16.1",
     "pymupdf",
     "python-docx",
     "rank-bm25",
@@ -28,6 +28,15 @@ dependencies = [
     "tavily-python>=0.5.0",
     "celery>=5.3.0",
     "redis>=5.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -47,5 +56,11 @@ ignore = ["E501", "W293"]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
 markers = ["eval: RAG evaluation pipeline benchmark tests"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_configs = true
+
 
 

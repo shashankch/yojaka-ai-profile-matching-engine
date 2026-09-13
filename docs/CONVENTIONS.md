@@ -1,6 +1,6 @@
-# Agentic Profile Matching Engine: Engineering Conventions
+# Yojaka AI (Agentic Profile Matching Engine): Engineering Conventions
 
-This document defines the architectural guidelines, code quality standards, and design conventions for the **Agentic Profile Matching Engine**. These standards reflect production-grade software development expectations.
+This document defines the architectural guidelines, code quality standards, and design conventions for **Yojaka AI (Agentic Profile Matching Engine)**. These standards reflect production-grade software development expectations.
 
 ---
 
@@ -107,11 +107,12 @@ Before submitting a Pull Request for ANY subphase:
 
 ## 🤖 9. Intent Routing & Structured LLM Standards
 
-1. **Decoupled Tiered Intent Routing (ADR-009)**
-   - Hardcoded substring / keyword matching arrays for routing decisions are strictly prohibited.
-   - Graph routing MUST use a tiered hybrid architecture:
-     - Tier 1: Local cosine similarity via in-memory `SentenceTransformer` anchor embeddings (< 2ms, 0 API cost).
-     - Tier 2: LLM structured intent classification (`with_structured_output(RouteDecision)`) for ambiguous inputs.
+1. **LLM-Driven Intent Routing & Dynamic Anchors (ADR-009)**
+   - Hardcoded substring / keyword matching arrays and static phrase lists for routing decisions are strictly prohibited.
+   - Graph routing MUST use an LLM-driven architecture with dynamic anchor synthesis and query caching:
+     - **Structural Fast Path & In-Memory LRU Cache (0ms)**: Multi-line raw JD pastes and repeated MD5-hashed queries resolve in sub-millisecond time.
+     - **Primary Tier**: LLM structured intent classification (`with_structured_output(RouteDecision)`) with active session context.
+     - **Secondary Tier (Fallback)**: Dynamic semantic embedding router evaluating cosine similarity against dynamic intent prototypes synthesized by the LLM (`generate_dynamic_intent_anchors`) with calibrated thresholds (0.20).
 
 2. **Schema-Enforced Tool Outputs (ADR-010)**
    - All tool functions expecting structured outputs from LLMs MUST use `invoke_structured()` with explicit Pydantic V2 schemas.
@@ -166,4 +167,25 @@ Before submitting a Pull Request for ANY subphase:
 
 3. **Supply Chain & Secret Auditing**
    - CI workflows must include automated secret scanning (`gitleaks`) and dependency vulnerability auditing (`pip-audit`).
+
+---
+
+## 📂 14. Zero-Disk Ingestion & Generative Skill Expansion Standards (ADR-013, ADR-016)
+
+1. **Zero-Disk In-Memory Stream Processing & Ephemeral Multi-Tenant Isolation (ADR-016)**
+   - Uploaded resumes must be processed directly from in-memory byte buffers (`io.BytesIO`) using stream-compatible document parsers (`pymupdf.open(stream=stream_bytes, filetype="pdf")`, `docx.Document(io.BytesIO(stream_bytes))`).
+   - Persisting unencrypted candidate resumes or uploaded PII to ephemeral local disk or shared persistent database collections is strictly prohibited.
+   - The application uses `CompositeVectorStore`, isolating uploads into session-scoped in-memory collections (`uploads_{session_id}`) via `chromadb.EphemeralClient()`.
+   - Chunks must be vectorized and upserted directly into the active session vector store with provenance URI formatted as `stream://{filename}?hash={content_hash}`.
+   - Uploaded files must enforce a strict 10MB size bound before reading bytes into memory.
+
+2. **Generative LLM Skill Expansion over Static Taxonomies (ADR-013)**
+   - Do NOT maintain brittle manual static taxonomy YAML dictionaries for domain skill mapping.
+   - Requirement extraction must generate dynamic structured skill expansions (`Dict[str, List[str]]`) at runtime.
+   - `JobMatcher._skill_matches_candidate()` must evaluate semantic equivalence so specialized candidate technologies (e.g. AWS, GCP) satisfy parent requirements (e.g. Cloud) using word-boundary token matching to avoid false positives (e.g. Java vs JavaScript).
+
+3. **Anti-XSS Candidate Data Sanitization (OWASP Standard)**
+   - All candidate-derived tokens, names, education, experience, and paths interpolated into HTML UI templates (such as candidate cards in `app.py`) MUST be strictly sanitized using `html.escape(..., quote=True)` to neutralize script injection and markup tampering.
+
+
 

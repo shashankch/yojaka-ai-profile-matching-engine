@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Optional
+from typing import TypedDict, List, Dict, Optional
 from langchain_core.messages import BaseMessage
 
 
@@ -6,6 +6,7 @@ class JobRequirements(TypedDict, total=False):
     title: str
     must_have_skills: List[str]
     nice_to_have_skills: List[str]
+    skill_expansions: Dict[str, List[str]]
     min_experience_years: int
     education_level: str
     other_constraints: List[str]
@@ -14,7 +15,7 @@ class JobRequirements(TypedDict, total=False):
 class CandidateMatch(TypedDict, total=False):
     candidate_id: str
     name: str
-    score: int
+    score: float
     matched_skills: List[str]
     missing_skills: List[str]
     experience_years: int

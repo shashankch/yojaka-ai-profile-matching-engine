@@ -129,3 +129,132 @@ def test_job_matcher_custom_store_injection():
         res = matcher.match("Golang engineer with 5+ years", min_exp=5)
         assert len(res["top_matches"]) == 1
         assert res["top_matches"][0]["candidate_name"] == "Charlie"
+
+
+def test_job_matcher_skill_expansions():
+    mock_store = MagicMock()
+    mock_store.get_all.return_value = {
+        "documents": [
+            "Senior Infrastructure Architect with AWS and Kubernetes experience.",
+            "Junior Frontend Developer with HTML and CSS.",
+        ],
+        "metadatas": [
+            {
+                "candidate_name": "DevOps Expert",
+                "resume_path": "devops.pdf",
+                "experience_years": 6,
+                "skills": "AWS, Kubernetes, Docker",
+                "education": "BS",
+                "section": "WORK EXPERIENCE",
+            },
+            {
+                "candidate_name": "Junior Web",
+                "resume_path": "web.pdf",
+                "experience_years": 1,
+                "skills": "HTML, CSS",
+                "education": "BA",
+                "section": "WORK EXPERIENCE",
+            },
+        ],
+        "ids": ["d1", "d2"],
+    }
+    mock_store.query.return_value = {"ids": [["d1", "d2"]], "distances": [[0.2, 0.9]]}
+
+    with patch("agentic_profile_matching.job_matcher.SentenceTransformer") as mock_st:
+        mock_st.return_value.encode.return_value.tolist.return_value = [0.1] * 384
+        matcher = JobMatcher(store=mock_store)
+
+        # Candidate has AWS, query requires Cloud. With expansion, should match!
+        res = matcher.match(
+            job_description="Seeking candidate with Cloud experience",
+            must_have_skills=["Cloud"],
+            skill_expansions={"Cloud": ["AWS", "GCP", "Azure"]},
+            apply_filters=True,
+        )
+
+        assert len(res["top_matches"]) == 1
+        assert res["top_matches"][0]["candidate_name"] == "DevOps Expert"
+        assert "Cloud" in res["top_matches"][0]["matched_skills"]
+
+
+def test_job_matcher_word_boundary_skill_matching():
+    mock_store = MagicMock()
+    mock_store.get_all.return_value = {
+        "documents": ["Frontend developer with JavaScript and TypeScript experience."],
+        "metadatas": [
+            {
+                "candidate_name": "JS Dev",
+                "resume_path": "js.pdf",
+                "experience_years": 4,
+                "skills": "JavaScript, TypeScript",
+                "education": "BS",
+                "section": "SKILLS",
+            }
+        ],
+        "ids": ["id_js"],
+    }
+    mock_store.query.return_value = {"ids": [["id_js"]], "distances": [[0.5]]}
+
+    with patch("agentic_profile_matching.job_matcher.SentenceTransformer") as mock_st:
+        mock_st.return_value.encode.return_value.tolist.return_value = [0.1] * 384
+        matcher = JobMatcher(store=mock_store)
+
+        # Requirement is "Java", candidate only has "JavaScript". Must NOT match!
+        res = matcher.match(
+            job_description="Seeking Java engineer",
+            must_have_skills=["Java"],
+            apply_filters=True,
+        )
+
+        assert len(res["top_matches"]) == 0
+
+
+def test_job_matcher_cache_invalidated_on_document_text_update():
+    mock_store = MagicMock()
+    mock_store.get_all.return_value = {
+        "documents": ["Original resume text version 1"],
+        "metadatas": [{"candidate_name": "Alice", "experience_years": 3, "skills": "Python", "resume_path": "a.pdf"}],
+        "ids": ["id_1"],
+    }
+    mock_store.query.return_value = {"ids": [["id_1"]], "distances": [[0.1]]}
+
+    with patch("agentic_profile_matching.job_matcher.SentenceTransformer") as mock_st:
+        mock_st.return_value.encode.return_value.tolist.return_value = [0.1] * 384
+        matcher = JobMatcher(store=mock_store)
+
+        matcher.match("Python")
+        initial_bm25 = matcher._cached_bm25
+
+        # Now simulate document content update with the SAME id
+        mock_store.get_all.return_value = {
+            "documents": ["Completely revised resume text version 2 with Go and Rust"],
+            "metadatas": [
+                {"candidate_name": "Alice", "experience_years": 4, "skills": "Go, Rust", "resume_path": "a.pdf"}
+            ],
+            "ids": ["id_1"],
+        }
+
+        matcher.match("Go")
+        updated_bm25 = matcher._cached_bm25
+
+        # The cache MUST be rebuilt with new corpus
+        assert initial_bm25 is not updated_bm25
+
+
+def test_job_matcher_score_clamping():
+    mock_store = MagicMock()
+    mock_store.get_all.return_value = {
+        "documents": ["Python specialist"],
+        "metadatas": [{"candidate_name": "Dev", "experience_years": 10, "skills": "Python", "resume_path": "dev.pdf"}],
+        "ids": ["d1"],
+    }
+    mock_store.query.return_value = {"ids": [["d1"]], "distances": [[0.0]]}
+
+    with patch("agentic_profile_matching.job_matcher.SentenceTransformer") as mock_st:
+        mock_st.return_value.encode.return_value.tolist.return_value = [0.1] * 384
+        matcher = JobMatcher(store=mock_store)
+
+        res = matcher.match("Python developer with 5+ years experience")
+        assert len(res["top_matches"]) == 1
+        score = res["top_matches"][0]["match_score"]
+        assert 0.0 <= score <= 100.0

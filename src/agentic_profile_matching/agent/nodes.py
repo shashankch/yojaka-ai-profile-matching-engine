@@ -1,7 +1,9 @@
 import os
 import time
 import json
-from typing import Dict, Any, Optional
+import concurrent.futures
+import threading
+from typing import Dict, Any, Optional, Tuple
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.tools import tool
@@ -59,17 +61,30 @@ def _get_llm(state: AgentState, config: Optional[RunnableConfig] = None):
         or (state.get("llm_model") if isinstance(state, dict) else None)
         or app_config.DEFAULT_MODEL
     )
+
+    provider_env_map = {
+        "groq": "GROQ_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+        "google": "GEMINI_API_KEY",
+        "sarvam": "SARVAM_API_KEY",
+        "openai": "OPENAI_API_KEY",
+    }
+    target_env = provider_env_map.get(str(provider).lower(), "GROQ_API_KEY")
+
     api_key = (
         configurable.get("api_key")
         or (state.get("api_key") if isinstance(state, dict) else None)
+        or os.getenv(target_env)
         or os.getenv("GROQ_API_KEY")
         or os.getenv("GEMINI_API_KEY")
+        or os.getenv("SARVAM_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
         or ""
     )
     api_url = (
         configurable.get("api_url")
-        or (state.get("api_url") if isinstance(state, dict) else None)
         or os.getenv("GROQ_API_URL")
+        or (state.get("api_url") if isinstance(state, dict) else None)
     )
 
     return app_config.get_llm_model(
@@ -165,6 +180,7 @@ def search_resumes_node(state: AgentState, config: Optional[RunnableConfig] = No
     title = requirements.get("title", "Software Engineer")
     must_have = requirements.get("must_have_skills", [])
     min_exp = requirements.get("min_experience_years", 0)
+    skill_expansions = requirements.get("skill_expansions", {})
 
     coarse_limit = state.get("coarse_screen_limit") or app_config.DEFAULT_COARSE_LIMIT
     retrieval_k = max(int(coarse_limit * 1.5), 15)
@@ -174,15 +190,23 @@ def search_resumes_node(state: AgentState, config: Optional[RunnableConfig] = No
         store = _get_store(config)
         matcher = JobMatcher(store=store)
 
-        query_text = f"Job Title: {title}. Must-Have Skills: {', '.join(must_have)}. Experience: {min_exp} years."
+        # Enrich search query text with semantic expansion terms
+        expanded_keywords = []
+        if skill_expansions:
+            for parent_skill, children in skill_expansions.items():
+                if children:
+                    expanded_keywords.append(f"{parent_skill} ({', '.join(children[:3])})")
+        skills_query_str = ", ".join(expanded_keywords) if expanded_keywords else ", ".join(must_have)
+        query_text = f"Job Title: {title}. Must-Have Skills: {skills_query_str}. Experience: {min_exp} years."
         logger.info(f"Retrieving candidate resumes for requirements: {requirements}")
 
-        # Try strict filtering first
+        # Try strict filtering first (with semantic expansion for must_haves)
         results = matcher.match(
             job_description=query_text,
             k=retrieval_k,
             min_exp=min_exp,
             must_have_skills=must_have,
+            skill_expansions=skill_expansions,
             apply_filters=True,
         )
 
@@ -194,6 +218,7 @@ def search_resumes_node(state: AgentState, config: Optional[RunnableConfig] = No
                 k=retrieval_k,
                 min_exp=min_exp,
                 must_have_skills=must_have,
+                skill_expansions=skill_expansions,
                 apply_filters=False,
             )
 
@@ -216,19 +241,24 @@ def rank_candidates_node(state: AgentState, config: Optional[RunnableConfig] = N
 
     try:
         requirements = state.get("requirements", {}) or {}
+        skill_expansions = requirements.get("skill_expansions", {})
+        expansions_norm = {k.lower().strip(): v for k, v in skill_expansions.items() if isinstance(v, list)}
         raw_matches = state.get("shortlist", []) or []
         ranked_shortlist = []
 
         for c in raw_matches:
             candidate_skills = [s.lower().strip() for s in c.get("matched_skills", []) + c.get("skills", []) if s]
 
-            # Calculate matched must-have and nice-to-have skills
-            matched_must = [
-                s for s in requirements.get("must_have_skills", []) if s.lower().strip() in candidate_skills
-            ]
-            missing_must = [
-                s for s in requirements.get("must_have_skills", []) if s.lower().strip() not in candidate_skills
-            ]
+            # Calculate matched must-have and nice-to-have skills with semantic expansion support
+            matched_must = []
+            missing_must = []
+            for req_skill in requirements.get("must_have_skills", []):
+                req_lower = req_skill.lower().strip()
+                synonyms = [req_lower] + [syn.lower().strip() for syn in expansions_norm.get(req_lower, []) if syn]
+                if any(syn in candidate_skills for syn in synonyms):
+                    matched_must.append(req_skill)
+                else:
+                    missing_must.append(req_skill)
 
             # Structure CandidateMatch profile
             candidate_profile = {
@@ -237,6 +267,8 @@ def rank_candidates_node(state: AgentState, config: Optional[RunnableConfig] = N
                 "score": c.get("match_score", 0),
                 "matched_skills": matched_must,
                 "missing_skills": missing_must,
+                "skills": c.get("skills", []),
+                "raw_text": c.get("raw_text", ""),
                 "experience_years": c.get("experience_years", 0),
                 "education": c.get("education", "Not Specified"),
                 "relevance_excerpts": c.get("relevant_excerpts", []),
@@ -267,13 +299,12 @@ def rank_candidates_node(state: AgentState, config: Optional[RunnableConfig] = N
 def deep_screen_node(state: AgentState, config: Optional[RunnableConfig] = None) -> Dict[str, Any]:
     """
     Round 2: profile deep text audit.
-    Evaluates Top 5 candidate resumes sequentially, mapping strengths, gaps, and suggestions.
+    Evaluates Top 5 candidate resumes with parallel processing and copy-on-write state immutability,
+    mapping strengths, gaps, and suggestions.
     """
     shortlist = state.get("shortlist", [])
     requirements = state.get("requirements", {})
-    errors = state.get("errors")
-    if errors is None:
-        errors = []
+    errors = list(state.get("errors") or [])
 
     try:
         llm = _get_llm(state, config)
@@ -287,7 +318,21 @@ def deep_screen_node(state: AgentState, config: Optional[RunnableConfig] = None)
     candidates_to_screen = shortlist[: int(deep_limit)]
     logger.info(f"Executing Round 2 (Deep Screening) on top {len(candidates_to_screen)} candidates...")
 
-    for idx, c in enumerate(candidates_to_screen):
+    rate_limiter = threading.Semaphore(2)
+    _rate_lock = threading.Lock()
+    _last_call_time = 0.0
+
+    def _rate_limited_call():
+        nonlocal _last_call_time
+        with _rate_lock:
+            now = time.time()
+            elapsed = now - _last_call_time
+            if elapsed < app_config.THROTTLE_DELAY:
+                time.sleep(app_config.THROTTLE_DELAY - elapsed)
+            _last_call_time = time.time()
+
+    def _screen_single(c_orig: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
+        c = dict(c_orig)
         candidate_name = c.get("candidate_name") or c.get("name") or "Unknown Candidate"
         resume_text = c.get("raw_text")
 
@@ -297,7 +342,6 @@ def deep_screen_node(state: AgentState, config: Optional[RunnableConfig] = None)
             if not res or not res.get("success"):
                 err_msg = f"Incomplete parsing: could not read resume for {candidate_name} ({res.get('error') if res else 'Empty response'})"
                 logger.warning(err_msg)
-                errors.append(err_msg)
                 c["strengths"] = ["Strong skill overlap based on RAG indexing"]
                 c["gaps"] = ["Could not audit text (file unreadable / unparsed)"]
                 c["improvement_suggestions"] = "Review resume file formatting before interviewing candidate."
@@ -305,16 +349,12 @@ def deep_screen_node(state: AgentState, config: Optional[RunnableConfig] = None)
                 c["screening_reasoning"] = (
                     f"Fallback screening (unreadable file: {res.get('error') if res else 'Unknown error'})"
                 )
-                continue
+                return c, err_msg
             resume_text = res["content"]
 
         # Truncate content to avoid model token limits
         if len(resume_text) > app_config.RESUME_TRUNCATION_LIMIT:
             resume_text = resume_text[: app_config.RESUME_TRUNCATION_LIMIT] + "... [truncated]"
-
-        # Throttling delay between LLM calls to respect API limits
-        if idx > 0:
-            time.sleep(app_config.THROTTLE_DELAY)
 
         if llm is None:
             c["strengths"] = ["Semantic match based on vector DB indexing"]
@@ -322,7 +362,7 @@ def deep_screen_node(state: AgentState, config: Optional[RunnableConfig] = None)
             c["improvement_suggestions"] = "Configure LLM provider with a valid API key."
             c["screening_status"] = "Screened"
             c["screening_reasoning"] = "Fallback screening due to unconfigured LLM"
-            continue
+            return c, None
 
         prompt_content = f"""Candidate: {candidate_name}
 Job Title: {requirements.get("title", "Software Engineer")}
@@ -337,36 +377,73 @@ Candidate Resume Text:
             ]
             return invoke_structured(llm, messages, DeepScreenOutput)
 
-        try:
-            result = execute_with_retry(_call_deep_screen)
-            c["strengths"] = result.get("strengths", [])
-            c["gaps"] = result.get("gaps", [])
-            c["improvement_suggestions"] = result.get("improvement_suggestions", "")
-            c["screening_status"] = result.get("screening_status", "Screened")
-            c["screening_reasoning"] = result.get("screening_reasoning", "")
-        except Exception as e:
-            err_msg = f"Failed to screen {candidate_name}: {e}"
-            logger.error(err_msg)
-            errors.append(err_msg)
-            c["strengths"] = ["Semantic match based on vector DB indexing"]
-            c["gaps"] = ["Skipped deep screening audit due to LLM error"]
-            c["improvement_suggestions"] = "Schedule interview to evaluate candidates skills directly."
-            c["screening_status"] = "Screened"
-            c["screening_reasoning"] = f"Fallback screening due to LLM or parse error: {str(e)}"
+        with rate_limiter:
+            try:
+                _rate_limited_call()
+                result = execute_with_retry(_call_deep_screen)
+                c["strengths"] = result.get("strengths", [])
+                c["gaps"] = result.get("gaps", [])
+                c["improvement_suggestions"] = result.get("improvement_suggestions", "")
+                c["screening_status"] = result.get("screening_status", "Screened")
+                c["screening_reasoning"] = result.get("screening_reasoning", "")
+                return c, None
+            except Exception as e:
+                err_msg = f"Failed to screen {candidate_name}: {e}"
+                logger.error(err_msg)
+                c["strengths"] = ["Semantic match based on vector DB indexing"]
+                c["gaps"] = ["Skipped deep screening audit due to LLM error"]
+                c["improvement_suggestions"] = "Schedule interview to evaluate candidates skills directly."
+                c["screening_status"] = "Screened"
+                c["screening_reasoning"] = f"Fallback screening due to LLM or parse error: {str(e)}"
+                return c, err_msg
 
-    return {"shortlist": shortlist, "current_round": 2, "errors": errors}
+    updated_screened = []
+    if candidates_to_screen:
+        max_workers = min(3, len(candidates_to_screen))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_idx = {executor.submit(_screen_single, c): idx for idx, c in enumerate(candidates_to_screen)}
+            results_by_idx = {}
+            for future in concurrent.futures.as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    c_res, err = future.result()
+                    results_by_idx[idx] = c_res
+                    if err:
+                        errors.append(err)
+                except Exception as ex:
+                    err_msg = f"Unexpected error screening candidate at index {idx}: {ex}"
+                    logger.error(err_msg)
+                    errors.append(err_msg)
+                    fallback_c = dict(candidates_to_screen[idx])
+                    fallback_c["strengths"] = fallback_c.get("strengths") or [
+                        "Semantic match based on vector DB indexing"
+                    ]
+                    fallback_c["gaps"] = fallback_c.get("gaps") or [
+                        "Skipped deep screening audit due to unhandled execution error"
+                    ]
+                    fallback_c["improvement_suggestions"] = fallback_c.get("improvement_suggestions") or (
+                        "Schedule interview to evaluate candidates skills directly."
+                    )
+                    fallback_c["screening_status"] = "Screened"
+                    fallback_c["screening_reasoning"] = f"Fallback screening (unhandled error: {ex})"
+                    results_by_idx[idx] = fallback_c
+
+            updated_screened = [results_by_idx[i] for i in range(len(candidates_to_screen))]
+
+    # Combine screened candidates with remainder of shortlist (copy-on-write immutability)
+    final_shortlist = updated_screened + [dict(c) for c in shortlist[int(deep_limit) :]]
+    return {"shortlist": final_shortlist, "current_round": 2, "errors": errors}
 
 
 @trace_node("recommendation")
 def recommendation_node(state: AgentState, config: Optional[RunnableConfig] = None) -> Dict[str, Any]:
     """
     Round 3: Final Hiring decisions & customized technical screening questions generator.
+    Enforces copy-on-write state immutability and robust safety guardrails.
     """
     shortlist = state.get("shortlist", [])
     requirements = state.get("requirements", {})
-    errors = state.get("errors")
-    if errors is None:
-        errors = []
+    errors = list(state.get("errors") or [])
 
     try:
         llm = _get_llm(state, config)
@@ -380,7 +457,9 @@ def recommendation_node(state: AgentState, config: Optional[RunnableConfig] = No
     candidates_to_decide = shortlist[: int(rec_limit)]
     logger.info(f"Executing Round 3 (Hire Decision & QGen) for top {len(candidates_to_decide)} candidates...")
 
-    for idx, c in enumerate(candidates_to_decide):
+    updated_decided = []
+    for idx, c_orig in enumerate(candidates_to_decide):
+        c = dict(c_orig)
         if idx > 0:
             time.sleep(app_config.THROTTLE_DELAY)
 
@@ -417,8 +496,8 @@ def recommendation_node(state: AgentState, config: Optional[RunnableConfig] = No
             exp_meets = candidate_exp >= min_exp_req
 
             if llm_status in ["Strong Hire", "Borderline Hire", "Rejected / No-Hire"]:
-                # Guardrail: If candidate is missing mandatory skills or fails exp, override to Rejected
-                if (len(missing) > 0 and len(missing) > 1) or not exp_meets:
+                # Guardrail: If candidate is missing 2+ mandatory skills or fails exp, override to Rejected
+                if len(missing) >= 2 or not exp_meets:
                     c["screening_status"] = "Rejected / No-Hire"
                 else:
                     c["screening_status"] = llm_status
@@ -433,7 +512,10 @@ def recommendation_node(state: AgentState, config: Optional[RunnableConfig] = No
         except Exception:
             c["screening_status"] = "Screened"
 
-    return {"shortlist": shortlist, "current_round": 3, "errors": errors}
+        updated_decided.append(c)
+
+    final_shortlist = updated_decided + [dict(c) for c in shortlist[int(rec_limit) :]]
+    return {"shortlist": final_shortlist, "current_round": 3, "errors": errors}
 
 
 @trace_node("generate_report")
@@ -652,10 +734,24 @@ def search_web_tool(query: str) -> str:
     """
     Search the web for candidate portfolios, Github repositories, technology news, or general information.
     """
-    res = mcp_client.call_tool("search", "search_web", {"query": query})
-    if isinstance(res, dict) and "results" in res:
-        return json.dumps(res["results"])
-    return str(res)
+    try:
+        from agentic_profile_matching import config as app_config
+
+        if not app_config.USE_MCP:
+            from agentic_profile_matching.search_mcp_server import search_web
+
+            res = search_web(query)
+            if isinstance(res, dict) and "results" in res:
+                return json.dumps(res["results"])
+            return str(res)
+
+        res = mcp_client.call_tool("search", "search_web", {"query": query})
+        if isinstance(res, dict) and "results" in res:
+            return json.dumps(res["results"])
+        return str(res)
+    except Exception as e:
+        logger.warning(f"search_web_tool error: {e}")
+        return json.dumps([{"title": f"Web results for: {query}", "snippet": f"Search lookup for '{query}'"}])
 
 
 @tool
@@ -663,10 +759,24 @@ def fetch_candidate_notes_tool(candidate_name: str) -> str:
     """
     Retrieve mock HR coordinator screening notes for a specific candidate name.
     """
-    res = mcp_client.call_tool("search", "fetch_candidate_notes", {"candidate_name": candidate_name})
-    if isinstance(res, dict) and "notes" in res:
-        return res["notes"]
-    return str(res)
+    try:
+        from agentic_profile_matching import config as app_config
+
+        if not app_config.USE_MCP:
+            from agentic_profile_matching.search_mcp_server import fetch_candidate_notes
+
+            res = fetch_candidate_notes(candidate_name)
+            if isinstance(res, dict) and "notes" in res:
+                return res["notes"]
+            return str(res)
+
+        res = mcp_client.call_tool("search", "fetch_candidate_notes", {"candidate_name": candidate_name})
+        if isinstance(res, dict) and "notes" in res:
+            return res["notes"]
+        return str(res)
+    except Exception as e:
+        logger.warning(f"fetch_candidate_notes_tool error: {e}")
+        return f"No coordinator notes found for '{candidate_name}'."
 
 
 @trace_node("conversational_query")

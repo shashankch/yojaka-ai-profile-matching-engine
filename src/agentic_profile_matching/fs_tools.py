@@ -44,12 +44,18 @@ def read_file(filepath: str) -> Dict:
                 except Exception:
                     content = ""
 
-            # 2. PyMuPDF (fitz) - Primary layout-aware engine with block sorting
+            # 2. PyMuPDF (pymupdf) - Primary layout-aware engine with block sorting
             if not content:
                 try:
-                    import fitz
+                    try:
+                        import pymupdf
 
-                    doc = fitz.open(str(path))
+                        doc = pymupdf.open(str(path))
+                    except (ImportError, AttributeError):
+                        import fitz
+
+                        doc = fitz.open(str(path))
+
                     pages_text = []
                     for page in doc:
                         text = page.get_text("text", sort=True)
@@ -58,6 +64,7 @@ def read_file(filepath: str) -> Dict:
                     content = "\n\n".join(pages_text)
                     doc.close()
                 except Exception:
+                    content = ""
                     # 3. Standard pypdf fallback
                     reader = PdfReader(str(path))
                     content = "\n".join(page.extract_text() or "" for page in reader.pages)

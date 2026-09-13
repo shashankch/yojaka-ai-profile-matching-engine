@@ -28,6 +28,15 @@ def run_scenarios():
         print("Error: GROQ_API_KEY not found in env.")
         return
 
+    common_config = {
+        "configurable": {
+            "thread_id": "scenario-test-thread",
+            "api_key": api_key,
+            "llm_provider": "Groq",
+            "llm_model": "openai/gpt-oss-120b",
+        }
+    }
+
     state = {
         "messages": [HumanMessage(content=TEST_JD)],
         "requirements": {},
@@ -39,15 +48,11 @@ def run_scenarios():
         "final_report": "",
         "feedback_pending": False,
         "user_feedback": "",
-        "llm_provider": "Groq",
-        "llm_model": "openai/gpt-oss-120b",
-        "api_key": api_key,
-        "api_url": None,
     }
 
     # Run Scenario 1, 2, 3, 4: Initial JD parsing and full cascading screening
     print("\n--- SCENARIOS 1-4: Raw JD Ingestion & Cascading Screening (Rounds 1, 2 & 3) ---")
-    result = matching_agent_workflow.invoke(state, config={"configurable": {"thread_id": "scenario-test-thread"}})
+    result = matching_agent_workflow.invoke(state, config=common_config)
 
     print("\n[Scenario 1] Extracted Job Requirements:")
     print(json_format(result["requirements"]))
@@ -58,38 +63,30 @@ def run_scenarios():
         print(f"     Experience: {c['experience_years']} yrs | Education: {c['education']}")
         if c.get("strengths"):
             print(f"     Strengths: {c['strengths']}")
+        if c.get("gaps"):
             print(f"     Gaps: {c['gaps']}")
         if c.get("interview_questions"):
-            print("     Tailored Questions:")
-            for q in c["interview_questions"]:
-                print(f"       - {q}")
-        print()
+            print(f"     Questions: {c['interview_questions'][:2]}")
 
-    # Run Scenario 5: Refinement
-    print("\n--- SCENARIO 5: Interactive Refinement Mid-Conversation ---")
-    refinement_msg = "Re-rank candidates by making Python a must-have skill and nice-to-have skill Azure."
-    print(f"Adding user instruction: '{refinement_msg}'")
+    # Run Scenario 5: User Feedback Refinement Loop
+    print("\n--- SCENARIO 5: User Feedback & Dynamic Requirements Refinement ---")
+    feedback_instruction = "Focus more on AWS cloud deployment skills and raise minimum required experience to 4 years."
+    print(f"Adding user feedback message: '{feedback_instruction}'")
 
     state_refinement = {
-        "messages": result["messages"] + [HumanMessage(content=refinement_msg)],
+        "messages": result["messages"] + [HumanMessage(content=feedback_instruction)],
         "requirements": result["requirements"],
         "shortlist": result["shortlist"],
         "coarse_screen_limit": 10,
         "deep_screen_limit": 10,
         "recommendation_limit": 5,
         "current_round": 1,
-        "final_report": "",
+        "final_report": result["final_report"],
         "feedback_pending": False,
         "user_feedback": "",
-        "llm_provider": "Groq",
-        "llm_model": "openai/gpt-oss-120b",
-        "api_key": api_key,
-        "api_url": None,
     }
 
-    result_ref = matching_agent_workflow.invoke(
-        state_refinement, config={"configurable": {"thread_id": "scenario-test-thread"}}
-    )
+    result_ref = matching_agent_workflow.invoke(state_refinement, config=common_config)
 
     print("\n[Scenario 5] Updated Job Requirements:")
     print(json_format(result_ref["requirements"]))
@@ -119,15 +116,9 @@ def run_scenarios():
         "final_report": result_ref["final_report"],
         "feedback_pending": False,
         "user_feedback": "",
-        "llm_provider": "Groq",
-        "llm_model": "openai/gpt-oss-120b",
-        "api_key": api_key,
-        "api_url": None,
     }
 
-    result_query = matching_agent_workflow.invoke(
-        state_query, config={"configurable": {"thread_id": "scenario-test-thread"}}
-    )
+    result_query = matching_agent_workflow.invoke(state_query, config=common_config)
     print("\n[Scenario 6] Agent Response:")
     print(result_query["messages"][-1].content)
 

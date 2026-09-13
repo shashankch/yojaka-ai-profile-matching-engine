@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-12
+### Added
+- **Project Rebranding**: Rebranded to **Yojaka AI (Agentic Profile Matching Engine)** across UI headers, metadata, documentation, and Streamlit Cloud configuration.
+- **In-Memory Zero-Disk Resume Ingestion**: Added `ingest_stream(filename, stream_bytes)` to `IngestionService` and dedicated workspace uploader in `app.py` supporting `.pdf`, `.docx`, and `.txt` parsing purely in-memory via `io.BytesIO` without writing candidate files to disk ([ADR-016](docs/adr/ADR-016-zero-disk-in-memory-resume-ingestion.md)).
+- **Dynamic Semantic Skill Expansion**: Upgraded requirement extraction (`tools.py`, `nodes.py`, `job_matcher.py`) with LLM semantic skill synonym expansion, allowing queries like `"Cloud"` to automatically match candidates with AWS, GCP, Azure, Kubernetes, or Docker.
+- **Cold-Start Vector Store Auto-Bootstrap**: Added `@st.cache_resource` initialization in `app.py` that auto-indexes baseline candidate profiles if vector store is empty on Streamlit Cloud cold boot.
+- **Progressive Live Checkpoint Indicators**: Replaced blocking 60-second spinner with live `st.status` node execution checkpoints streaming progress events in real-time.
+- **PyMuPDF Modern Transport Hygiene**: Upgraded `import fitz` to `import pymupdf` in `fs_tools.py`, eliminating deprecation warnings to standard output that corrupted FastMCP stdio JSON-RPC framing.
+- **Stateless Credential Isolation (CWE-312)**: Enforced passing API keys and provider configurations exclusively via LangGraph `RunnableConfig` (`configurable["api_key"]`), removing credentials from serialized `AgentState`.
+- **Copy-on-Write Functional State Immutability**: Refactored `deep_screen_node` and `recommendation_node` to construct new candidate dictionaries, preventing in-place state corruption during LangGraph retries.
+- **Parallel Deep Screening**: Accelerated Round 2 deep screening audits using `ThreadPoolExecutor(max_workers=3)` and a `threading.Semaphore(2)` rate-limit guard with `THROTTLE_DELAY` spacing.
+- **Session-Scoped Ephemeral PII Isolation (`CompositeVectorStore`)**: Layered the baseline persistent disk vector store with a session-scoped in-memory vector store (`chromadb.EphemeralClient()`) via `CompositeVectorStore`. User-uploaded candidate resumes are vectorized strictly in RAM with zero disk persistence, isolating recruiter uploads per browser session and preventing multi-tenant PII exposure.
+- **Anti-XSS Output Sanitization**: Applied strict `html.escape(..., quote=True)` sanitization to all candidate-derived fields (`name`, `skills`, `education`, `experience_years`, `score`, `rel_path`) before rendering in Streamlit markdown, mitigating stored XSS vulnerabilities from parsed resume payloads.
+- **Coordinated Rate Limiting & Provider Key Routing**: Bound parallel screening execution with coordinated concurrency throttling in `deep_screen_node` to prevent LLM API 429 quota exhaustion; mapped provider configurations directly to provider-specific environment keys (`GROQ_API_KEY`, `GEMINI_API_KEY`, `SARVAM_API_KEY`, `OPENAI_API_KEY`).
+- **Exact Token Word-Boundary Skill Matching**: Upgraded `_skill_matches_candidate` with regex boundary matching `r"(?:\b|_)" + re.escape(...) + r"(?:\b|_)"`, eliminating false-positive substring matches (e.g. `Java` matching `JavaScript`, `C` matching `CSS`).
+- **LLM-Driven Intent Routing & Dynamic Anchor Synthesis**: Re-architected `route_input` in `routers.py` into a modern 2026 LLM-driven router (`_classify_via_llm` as primary authority), completely eliminating static hardcoded anchor dictionaries and keyword arrays. Added dynamic LLM anchor synthesis (`generate_dynamic_intent_anchors`), in-memory LRU query routing cache (`_ROUTING_CACHE`) for $0\text{ms}$ repeated queries, case-insensitive provider resolution in `config.py`, and direct in-process tool fallbacks in `nodes.py` ([ADR-009](docs/adr/ADR-009-tiered-semantic-embedding-intent-routing.md)).
+- **Stream Ingestion Guardrails & Single-Pass Extraction**: Optimized PyMuPDF extraction to a single pass; enforced pre-read 10MB file payload limits; added chunk deduplication by content hash (`stream_{filename}_{content_hash}_{section_clean}_{idx}`) and prior chunk pruning on re-upload.
+- **Corpus Fingerprinting & Suffix Handling**: Strengthened BM25 corpus hash validation in `JobMatcher` and added filename suffix stripping (`_resume`, `-cv`) in `MetadataExtractor`.
+
 ## [1.1.0] - 2026-08-30
 ### Added
 - Implemented **Tiered Production Hybrid Router** in `src/agentic_profile_matching/agent/routers.py` combining Tier 1 local SentenceTransformer vector similarity (< 2ms, 0 API cost) with Tier 2 LLM structured intent classification fallback (`with_structured_output(RouteDecision)`).

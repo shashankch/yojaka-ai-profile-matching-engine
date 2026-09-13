@@ -1,6 +1,6 @@
 chromadb>=1.5.9
 sentence-transformers
-pypdf
+pypdf>=6.16.1
 python-docx
 rank-bm25
 reportlab
@@ -13,5 +13,8 @@ langchain-google-genai
 langchain-openai
 mcp>=1.0.0
 tavily-python>=0.5.0
+pymupdf
+python-dotenv
 celery>=5.3.0
 redis>=5.0.0
+

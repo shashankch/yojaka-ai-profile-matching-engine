@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from langchain_core.messages import HumanMessage, AIMessage
 
 from agentic_profile_matching.agent.nodes import (
@@ -203,3 +203,53 @@ def test_conversational_query_node():
     res = conversational_query_node(state, config_dict)
     assert len(res["messages"]) == 2
     assert "Alice" in res["messages"][-1].content
+
+
+def test_rank_candidates_case_insensitive_skill_expansions():
+    state: AgentState = {
+        "shortlist": [
+            {
+                "resume_path": "stream://candidate1.pdf",
+                "candidate_name": "Cloud Engineer",
+                "match_score": 85,
+                "skills": ["AWS", "Docker"],
+                "raw_text": "Experienced AWS cloud engineer",
+            }
+        ],
+        "requirements": {
+            "title": "Cloud Architect",
+            "must_have_skills": ["cloud"],
+            # TitleCase key in expansions
+            "skill_expansions": {"Cloud": ["AWS", "GCP", "Azure"]},
+        },
+    }
+    res = rank_candidates_node(state)
+    cand = res["shortlist"][0]
+    assert "cloud" in cand["matched_skills"]
+    assert "cloud" not in cand["missing_skills"]
+    assert cand["raw_text"] == "Experienced AWS cloud engineer"
+
+
+def test_deep_screen_node_uses_in_memory_raw_text():
+    # When candidate has raw_text (from stream upload), read_file is NOT called
+    state: AgentState = {
+        "shortlist": [
+            {
+                "candidate_id": "stream://uploaded_resume.pdf",
+                "name": "Stream Candidate",
+                "score": 90,
+                "raw_text": "Jane Doe. Senior Python developer with 6 years experience.",
+            }
+        ],
+        "deep_screen_limit": 1,
+    }
+    with (
+        patch("agentic_profile_matching.agent.nodes.read_file") as mock_read_file,
+        patch("agentic_profile_matching.agent.nodes._get_llm", return_value=None),
+    ):
+        res = deep_screen_node(state)
+        mock_read_file.assert_not_called()
+        assert res["current_round"] == 2
+        assert res["shortlist"][0]["screening_status"] == "Screened"
+        # Reasoning was fallback due to unconfigured LLM, NOT unreadable file
+        assert "unreadable" not in res["shortlist"][0]["screening_reasoning"].lower()

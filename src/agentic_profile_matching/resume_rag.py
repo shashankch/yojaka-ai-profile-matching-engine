@@ -96,6 +96,13 @@ class MetadataExtractor:
         "LangChain",
         "RAG",
         "Data Science",
+        "Cloud",
+        "Cloud Computing",
+        "DevOps",
+        "Backend",
+        "Frontend",
+        "Full Stack",
+        "Distributed Systems",
     ]
 
     def extract_name(self, filename: str, text: str) -> str:
@@ -104,6 +111,9 @@ class MetadataExtractor:
         for prefix in ["resume_", "resume-", "cv_", "cv-", "summary_", "summary-"]:
             if base.lower().startswith(prefix):
                 base = base[len(prefix) :]
+        for suffix in ["_resume", "-resume", "_cv", "-cv", "_profile", "-profile"]:
+            if base.lower().endswith(suffix):
+                base = base[: -len(suffix)]
         if "_" in base or "-" in base or " " in base:
             name = base.replace("_", " ").replace("-", " ").title()
             name = " ".join(part for part in name.split() if part.isalpha())
@@ -134,6 +144,25 @@ class MetadataExtractor:
             else:
                 if re.search(pattern, text_lower):
                     found.append(skill)
+
+        # Open-ended extraction: parse explicit SKILLS / TECHNICAL SKILLS section
+        # Scope case-insensitivity strictly to the section title, keeping header terminators uppercase-only
+        skills_match = re.search(
+            r"(?i:TECHNICAL\s+SKILLS|SKILLS)\s*[:\n](.*?)(?:\n\s*[A-Z][A-Z\s]{3,}[:\n]|\Z)",
+            text,
+            re.DOTALL,
+        )
+        if skills_match:
+            section_content = skills_match.group(1).strip()
+            raw_tokens = re.split(r"[,•\n|;]", section_content)
+            for tok in raw_tokens:
+                clean_tok = tok.strip().strip(".-* ")
+                # Strip HTML tags/markup for security
+                clean_tok = re.sub(r"<[^>]+>", "", clean_tok).strip()
+                if clean_tok and 1 < len(clean_tok) <= 40 and not any(h in clean_tok.upper() for h in SECTION_HEADERS):
+                    # Canonicalize title case if all lowercase or mixed
+                    found.append(clean_tok)
+
         return sorted(list(set(found)))
 
     def extract_experience(self, text: str) -> int:

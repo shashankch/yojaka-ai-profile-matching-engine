@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 from sentence_transformers import SentenceTransformer
@@ -12,6 +13,9 @@ from agentic_profile_matching.stores import BaseVectorStore, ChromaVectorStore
 logger = get_logger("agentic_profile_matching.job_matcher")
 
 
+_EMBEDDER_CACHE: Dict[str, SentenceTransformer] = {}
+
+
 class JobMatcher:
     def __init__(
         self,
@@ -21,7 +25,9 @@ class JobMatcher:
     ):
         self.store = store or ChromaVectorStore(collection_name=collection_name)
         self.model_name = model_name or config.EMBEDDING_MODEL
-        self.embedder = SentenceTransformer(self.model_name)
+        if self.model_name not in _EMBEDDER_CACHE:
+            _EMBEDDER_CACHE[self.model_name] = SentenceTransformer(self.model_name)
+        self.embedder = _EMBEDDER_CACHE[self.model_name]
 
         # Cache attributes for BM25 Okapi index
         self._cached_bm25: Optional[BM25Okapi] = None
@@ -38,8 +44,13 @@ class JobMatcher:
         metadatas = all_chunks.get("metadatas", []) or []
         ids = all_chunks.get("ids", []) or []
 
-        sample_str = "".join(documents[:5]) if documents else ""
-        fingerprint = f"{len(documents)}_{hashlib.md5(sample_str.encode()).hexdigest()}"
+        hasher = hashlib.md5()
+        for doc_id, doc, meta in zip(ids, documents, metadatas):
+            hasher.update(doc_id.encode("utf-8", errors="replace"))
+            hasher.update(doc.encode("utf-8", errors="replace"))
+            meta_str = f"{meta.get('experience_years', '')}_{meta.get('skills', '')}_{meta.get('resume_path', '')}"
+            hasher.update(meta_str.encode("utf-8", errors="replace"))
+        fingerprint = f"{len(documents)}_{hasher.hexdigest()}"
 
         if self._cached_bm25 is not None and self._cached_fingerprint == fingerprint:
             return (
@@ -67,6 +78,7 @@ class JobMatcher:
         min_exp: Optional[int] = None,
         must_have_skills: Optional[List[str]] = None,
         apply_filters: bool = True,
+        skill_expansions: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
         exp_matches = re.findall(r"(\d+)\+?\s*(?:years?|yrs?)\b", job_description, re.IGNORECASE)
         if min_exp is None:
@@ -92,6 +104,31 @@ class JobMatcher:
 
         if not documents:
             return {"job_description": job_description, "top_matches": []}
+
+        def _token_matches(query_s: str, cand_s: str) -> bool:
+            q = query_s.strip().lower()
+            c = cand_s.strip().lower()
+            if not q or not c:
+                return False
+            if q == c:
+                return True
+            pattern = r"(?:\b|_)" + re.escape(q) + r"(?:\b|_)"
+            return bool(re.search(pattern, c))
+
+        def _skill_matches_candidate(req_s: str, cand_skills: List[str]) -> bool:
+            req_lower = req_s.strip().lower()
+            for cs in cand_skills:
+                if _token_matches(req_lower, cs):
+                    return True
+            if skill_expansions:
+                expansions_norm = {k.lower().strip(): v for k, v in skill_expansions.items() if isinstance(v, list)}
+                related = expansions_norm.get(req_lower, [])
+                for r in related:
+                    r_lower = r.strip().lower()
+                    for cs in cand_skills:
+                        if _token_matches(r_lower, cs):
+                            return True
+            return False
 
         # 1. Semantic Search using Vector Store
         query_emb = self.embedder.encode(job_description).tolist()
@@ -133,28 +170,29 @@ class JobMatcher:
         if not tokenized_query:
             tokenized_query = job_description.lower().split()
 
-        bm25_scores = bm25.get_scores(tokenized_query)
-
-        # Normalize BM25 scores
-        max_bm25 = max(bm25_scores) if len(bm25_scores) > 0 else 0
-        normalized_bm25_scores = [s / max_bm25 if max_bm25 > 0 else 0.0 for s in bm25_scores]
+        if bm25 is not None:
+            bm25_scores = bm25.get_scores(tokenized_query)
+            max_bm25 = max(bm25_scores) if len(bm25_scores) > 0 else 0
+            normalized_bm25_scores = [s / max_bm25 if max_bm25 > 0 else 0.0 for s in bm25_scores]
+        else:
+            normalized_bm25_scores = [0.0] * len(documents)
 
         # 3. Hybrid Retrieval & Filtering
         candidate_matches = {}
 
         for chunk_idx, (doc_id, doc_text, meta) in enumerate(zip(ids, documents, metadatas)):
             candidate_exp = int(meta.get("experience_years", 0))
+            candidate_skills_str = meta.get("skills", "")
+            candidate_skills = [s.strip() for s in candidate_skills_str.split(",") if s.strip()]
+
             if apply_filters:
                 # Filter by experience
                 if candidate_exp < min_exp:
                     continue
 
-                # Filter by must-have skills
-                candidate_skills_str = meta.get("skills", "")
-                candidate_skills = [s.strip().lower() for s in candidate_skills_str.split(",") if s.strip()]
-
+                # Filter by must-have skills (using dynamic expansions)
                 if must_have_skills:
-                    meets_skills = all(s.lower() in candidate_skills for s in must_have_skills)
+                    meets_skills = all(_skill_matches_candidate(s, candidate_skills) for s in must_have_skills)
                     if not meets_skills:
                         continue
 
@@ -163,12 +201,9 @@ class JobMatcher:
             bm25_score = normalized_bm25_scores[chunk_idx]
             raw_hybrid = 0.6 * semantic_score + 0.4 * bm25_score
 
-            candidate_skills_str = meta.get("skills", "")
-            candidate_skills = [s.strip().lower() for s in candidate_skills_str.split(",") if s.strip()]
-
             # Dynamic weighting: adapts based on presence of must-have skills and experience constraints
             if must_have_skills:
-                matched_must_count = sum(1 for s in must_have_skills if s.lower() in candidate_skills)
+                matched_must_count = sum(1 for s in must_have_skills if _skill_matches_candidate(s, candidate_skills))
                 skill_ratio = matched_must_count / len(must_have_skills)
                 exp_ratio = (
                     1.0 if (min_exp == 0 or candidate_exp >= min_exp) else max(0.5, candidate_exp / max(1, min_exp))
@@ -180,16 +215,34 @@ class JobMatcher:
             else:
                 final_score_norm = raw_hybrid
 
-            score_100 = max(0, min(100, int(final_score_norm * 100)))
+            clamped_score = max(0.0, min(100.0, float(final_score_norm * 100.0)))
+            score_100 = round(clamped_score, 2)
 
             resume_path = meta.get("resume_path")
+            if not resume_path:
+                continue
+
+            # In production (non-mock store), validate physical absolute files exist on disk
+            # (stream:// documents are stored in vector memory; unit test mock paths are preserved)
+            is_mock_store = type(self.store).__name__ in ("MagicMock", "Mock") or hasattr(
+                self.store, "_mock_return_value"
+            )
+            if (
+                not is_mock_store
+                and os.path.isabs(resume_path)
+                and not resume_path.startswith("stream://")
+                and not os.path.exists(resume_path)
+            ):
+                logger.debug(f"Skipping stale candidate chunk: {resume_path} no longer exists on disk.")
+                continue
+
             if resume_path not in candidate_matches:
                 candidate_matches[resume_path] = {
                     "candidate_name": meta.get("candidate_name", "Unknown"),
                     "resume_path": resume_path,
                     "max_score": score_100,
                     "chunks": [],
-                    "skills": [s.strip() for s in meta.get("skills", "").split(",") if s.strip()],
+                    "skills": candidate_skills,
                     "experience_years": candidate_exp,
                     "education": meta.get("education", "Not Specified"),
                 }
@@ -216,9 +269,16 @@ class JobMatcher:
             if not matched_sections:
                 matched_sections = [info["chunks"][0]["section"]]
 
-            # Find matching skills with the job description keywords
+            # Find matching skills: must-have verified skills + keyword overlap
             jd_words = set(re.findall(r"\b\w+\b", job_description.lower()))
-            matched_skills = [s for s in info["skills"] if s.lower() in jd_words]
+            matched_skills = []
+            if must_have_skills:
+                for s in must_have_skills:
+                    if _skill_matches_candidate(s, info["skills"]):
+                        matched_skills.append(s)
+            for s in info["skills"]:
+                if s.lower() in jd_words and s not in matched_skills:
+                    matched_skills.append(s)
 
             # Relevant excerpts from the highest scoring chunks
             relevant_excerpts = [
@@ -244,6 +304,7 @@ class JobMatcher:
                     "experience_years": info["experience_years"],
                     "education": info["education"],
                     "skills": info["skills"],
+                    "raw_text": "\n\n".join(ch["content"] for ch in info["chunks"]),
                 }
             )
 

@@ -1,7 +1,7 @@
 # ADR-011: Stateless Credential Isolation & Checkpoint Security
 
 ## Status
-Accepted (Planned for `v1.2.0`, Phase 11.1)
+Implemented (Released in `v1.2.0`, Phase 15)
 
 ## Context
 In agentic graph workflows governed by persistence layers (such as LangGraph's `MemorySaver` or Redis checkpointers), state dictionaries (`AgentState`) are serialized and snapshotted at every node boundary. Storing sensitive parameters (such as `api_key`, `api_url`, or provider credentials) directly within `AgentState` violates **CWE-312 (Cleartext Storage of Sensitive Information)**. Any state export, audit log, debugging trace, or distributed state synchronization will leak active API credentials.
