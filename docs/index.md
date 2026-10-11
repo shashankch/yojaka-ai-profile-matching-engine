@@ -5,9 +5,9 @@
   <a href="https://shashankch.github.io/yojaka-ai-profile-matching-engine/"><img src="https://img.shields.io/badge/Docs-MkDocs_Material-blueviolet.svg" alt="Documentation Site"></a>
   <a href="https://github.com/shashankch/yojaka-ai-profile-matching-engine/actions/workflows/deploy-docs.yml"><img src="https://github.com/shashankch/yojaka-ai-profile-matching-engine/actions/workflows/deploy-docs.yml/badge.svg" alt="Documentation Deploy CI"></a>
   <a href="https://github.com/shashankch/yojaka-ai-profile-matching-engine/actions/workflows/ci.yml"><img src="https://github.com/shashankch/yojaka-ai-profile-matching-engine/actions/workflows/ci.yml/badge.svg" alt="Python CI"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.5.0-blue.svg" alt="Version: v1.5.0"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-v1.6.0-blue.svg" alt="Version: v1.6.0"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue.svg" alt="Python Version"></a>
-  <a href="adr/index.md"><img src="https://img.shields.io/badge/ADRs-18%20Accepted-teal.svg" alt="Architecture Decision Records"></a>
+  <a href="adr/index.md"><img src="https://img.shields.io/badge/ADRs-19%20Accepted-teal.svg" alt="Architecture Decision Records"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Linter: Ruff"></a>
   <a href="https://github.com/shashankch/yojaka-ai-profile-matching-engine/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0"></a>
   <a href="CONVENTIONS.md"><img src="https://img.shields.io/badge/Conventions-Architectural-purple.svg" alt="Conventions"></a>
@@ -15,11 +15,11 @@
 </p>
 
 <p class="hero-subtitle">
-Production-Grade AI Recruiter &amp; Profile Matching Engine built with <strong>LangGraph 1.x Native Commands</strong>, <strong>Calibrated Margin Routing</strong>, <strong>Parallel Dual-Rubric Subgraphs</strong>, <strong>Layout-Aware Section Parsing</strong>, <strong>Anthropic Contextual Retrieval</strong>, <strong>Two-Stage Cross-Encoder Reranking</strong>, <strong>Hybrid RAG</strong>, <strong>Dynamic Skill Expansion</strong>, <strong>Zero-Disk In-Memory Upload</strong>, and <strong>Model Context Protocol (MCP)</strong>.
+Production-Grade AI Recruiter &amp; Profile Matching Engine built with <strong>LangGraph 1.x Native Commands</strong>, <strong>HyDE Query Synthesis</strong>, <strong>Parent-Document Chunking</strong>, <strong>Air-Gapped Local Inference (Ollama / vLLM)</strong>, <strong>Calibrated Margin Routing</strong>, <strong>Parallel Dual-Rubric Subgraphs</strong>, <strong>Layout-Aware Section Parsing</strong>, <strong>Anthropic Contextual Retrieval</strong>, <strong>Two-Stage Cross-Encoder Reranking</strong>, <strong>Hybrid RAG</strong>, <strong>Dynamic Skill Expansion</strong>, <strong>Zero-Disk In-Memory Upload</strong>, and <strong>Model Context Protocol (MCP)</strong>.
 </p>
 
-!!! quote "💡 What is Yojaka (योजक)?"
-    In classical Sanskrit, **योजक (Yojaka)** derives from the root *युज् (yuj)* — meaning *to connect, unite, align, or orchestrate*. Rather than treating candidate vetting as a cold keyword gatekeeper, **Yojaka AI** operates as an intelligent orchestrator: parsing unstructured human potential, dynamically expanding semantic equivalences, and cascading through structured reasoning to match talent with purpose.
+> **💡 What is Yojaka (योजक)?**  
+> In classical Sanskrit, **योजक (Yojaka)** derives from the root *युज् (yuj)* — meaning *to connect, unite, align, or orchestrate*. Rather than treating candidate vetting as a cold keyword gatekeeper, **Yojaka AI** operates as an intelligent orchestrator: parsing unstructured human potential, dynamically expanding semantic equivalences, and cascading through structured reasoning to match talent with purpose.
 
 ![Yojaka AI End-to-End Walkthrough Demo](assets/yojaka_demo.gif)
 
@@ -28,6 +28,7 @@ Production-Grade AI Recruiter &amp; Profile Matching Engine built with <strong>L
 ## ⚡ Core Highlights & Capabilities
 
 - 🎯 **3-Stage Cascading Funnel (`O(N) → O(K)`)**: Coarse hybrid vector/lexical retrieval (Stage 1) → structured LLM profile audit (Stage 2) → grounded decision synthesis with tailored interview questions (Stage 3). Eliminates rate-limit bottlenecks and token exhaustion.
+- 🧬 **Advanced RAG & Air-Gapped Local Inference (ADR-019)**: Hypothetical Document Embeddings (HyDE) query synthesis, hierarchical small-to-big parent-document chunk mapping (150–250 token child chunks linked to 1,000–1,500 character parent blocks), pre-retrieval faceted metadata filtering, and zero-cloud air-gapped local model inference via Ollama and vLLM.
 - 🔀 **Calibrated Margin Routing & Subgraphs (ADR-018)**: Mathematical embedding margin gating ($\Delta = \text{Top1} - \text{Top2} \ge 0.12$) dispatching confident queries in <2ms at $0 token cost, native LangGraph `Command(goto=...)` destination routing, concurrent dual-rubric candidate evaluation, and isolated typed subgraphs.
 - 📑 **Layout-Aware Section Document Parsing**: Parses PDF visual layout blocks (`pymupdf`), DOCX paragraph runs, and text delimiters into canonical sections (`SUMMARY`, `EXPERIENCE`, `SKILLS`, `EDUCATION`), preserving multi-role work histories without mid-sentence truncation.
 - 🧠 **Anthropic Contextual Retrieval Prepending**: Situates isolated resume chunks with 50–80 word document metadata banners before dense embedding and BM25 indexing, preserving pristine candidate text for recruiter UI display.
@@ -163,8 +164,8 @@ ruff format --check src/ tests/
 
 - 🌐 **[Online Documentation Site (MkDocs Material)](https://shashankch.github.io/yojaka-ai-profile-matching-engine/)**: Full interactive documentation with instant search, dark mode, high-res C4 diagrams, and ADR catalog hosted on GitHub Pages.
 - 🏛️ **[System Architecture & Technical Specifications](architecture.md)**: Deep dive on dataflow sequences, mathematical formulations, state transitions, and distributed scaling.
-- 📐 **[Architecture Decision Records (ADRs 001–018)](adr/index.md)**: Complete catalog of formal design decisions, evaluated alternatives, and trade-offs.
-- 🗺️ **[Implementation Roadmap](ROADMAP.md)**: Phased milestones (Completed Phases 1–18 and Future Milestones Phases 19–22).
+- 📐 **[Architecture Decision Records (ADRs 001–019)](adr/index.md)**: Complete catalog of formal design decisions, evaluated alternatives, and trade-offs.
+- 🗺️ **[Implementation Roadmap](ROADMAP.md)**: Phased milestones (Completed Phases 1–19 and Future Milestones Phases 20–22).
 - 🛡️ **[Engineering Conventions](CONVENTIONS.md)**: Architectural patterns, Pydantic V2 schemas, error boundaries, and type safety rules.
 - 🤝 **[Contributing Guidelines](CONTRIBUTING.md)**: Local developer setup, branching conventions, and quality gates.
 - 📝 **[Changelog](CHANGELOG.md)**: Semantic versioning release history.
@@ -172,11 +173,9 @@ ruff format --check src/ tests/
 
 ---
 
-## ⚖️ License & Trademarks
+## ⚖️ License
 
 This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE.md) file for details.
-
-> ℹ️ **Trademarks & Brand Logos Notice**: All product names, logos, brands, trademarks, and registered trademarks are property of their respective owners. All company, product, and service names used in this project and documentation are for identification purposes only. Use of these names, logos, and brands does not imply endorsement.
 
 ---
 

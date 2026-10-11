@@ -102,21 +102,34 @@ def _get_llm(state: AgentState, config: Optional[RunnableConfig] = None):
         "google": "GEMINI_API_KEY",
         "sarvam": "SARVAM_API_KEY",
         "openai": "OPENAI_API_KEY",
+        "ollama": "",
+        "vllm": "",
+        "local": "",
     }
     target_env = provider_env_map.get(str(provider).lower(), "GROQ_API_KEY")
+    is_local = str(provider).lower() in ("ollama", "vllm", "local")
 
     api_key = (
         configurable.get("api_key")
-        or (state.get("api_key") if isinstance(state, dict) else None)
-        or os.getenv(target_env)
+        or (os.getenv(target_env) if target_env else "")
+        or ("local" if is_local else "")
         or os.getenv("GROQ_API_KEY")
         or os.getenv("GEMINI_API_KEY")
         or os.getenv("SARVAM_API_KEY")
         or os.getenv("OPENAI_API_KEY")
         or ""
     )
+
+    if not api_key and isinstance(state, dict) and state.get("api_key"):
+        logger.warning(
+            "Passing 'api_key' in AgentState is deprecated (ADR-011 / Finding 6). Use RunnableConfig['configurable']['api_key']."
+        )
+        api_key = state.get("api_key")
+
     api_url = (
         configurable.get("api_url")
+        or (app_config.OLLAMA_BASE_URL if str(provider).lower() == "ollama" else None)
+        or (app_config.LOCAL_INFERENCE_URL if str(provider).lower() in ("vllm", "local") else None)
         or os.getenv("GROQ_API_URL")
         or (state.get("api_url") if isinstance(state, dict) else None)
     )
@@ -243,6 +256,11 @@ def search_resumes_node(state: AgentState, config: Optional[RunnableConfig] = No
         store = _get_store(config)
         matcher = JobMatcher(store=store)
 
+        try:
+            llm = _get_llm(state, config)
+        except Exception:
+            llm = None
+
         # Enrich search query text with semantic expansion terms
         expanded_keywords = []
         if skill_expansions:
@@ -261,6 +279,7 @@ def search_resumes_node(state: AgentState, config: Optional[RunnableConfig] = No
             must_have_skills=must_have,
             skill_expansions=skill_expansions,
             apply_filters=True,
+            llm=llm,
         )
 
         # Fallback to no strict filtering if zero matches exist
@@ -273,6 +292,7 @@ def search_resumes_node(state: AgentState, config: Optional[RunnableConfig] = No
                 must_have_skills=must_have,
                 skill_expansions=skill_expansions,
                 apply_filters=False,
+                llm=llm,
             )
 
         raw_matches = results.get("top_matches", []) if results else []
@@ -321,7 +341,8 @@ def rank_candidates_node(state: AgentState, config: Optional[RunnableConfig] = N
                 "matched_skills": matched_must,
                 "missing_skills": missing_must,
                 "skills": c.get("skills", []),
-                "raw_text": c.get("raw_text", ""),
+                "raw_text": c.get("full_parent_context") or c.get("raw_text", ""),
+                "full_parent_context": c.get("full_parent_context", ""),
                 "experience_years": c.get("experience_years", 0),
                 "education": c.get("education", "Not Specified"),
                 "relevance_excerpts": c.get("relevant_excerpts", []),

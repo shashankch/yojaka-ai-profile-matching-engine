@@ -18,6 +18,7 @@ from agentic_profile_matching.services.section_parser import (
     CANONICAL_SECTION_MAP,
 )
 from agentic_profile_matching.services.contextual_retrieval import ContextualEnricher
+from agentic_profile_matching.services.parent_document_service import ParentDocumentService
 from agentic_profile_matching.stores import BaseVectorStore
 
 logger = logging.getLogger("ingestion_service")
@@ -27,7 +28,8 @@ class IngestionService:
     """
     Business logic service for candidate resume ingestion into the vector store.
     Decouples protocol handlers (e.g., FastMCP filesystem server) from RAG ingestion mechanics.
-    Leverages Layout-Aware SectionParser (17.1) and Contextual Retrieval Prepending (17.2).
+    Leverages Layout-Aware SectionParser (17.1), Contextual Retrieval Prepending (17.2),
+    and Parent-Document Hierarchical Chunk Mapping (Phase 19 / ADR-019).
     """
 
     def __init__(
@@ -36,11 +38,13 @@ class IngestionService:
         pipeline: Optional[ResumeRAGPipeline] = None,
         parser: Optional[SectionParser] = None,
         enricher: Optional[ContextualEnricher] = None,
+        parent_service: Optional[ParentDocumentService] = None,
     ):
         self._store = store
         self._pipeline = pipeline
         self._parser = parser or SectionParser()
         self._enricher = enricher or ContextualEnricher()
+        self._parent_service = parent_service or ParentDocumentService()
         if self._pipeline is None and self._store is not None:
             self._pipeline = ResumeRAGPipeline(store=self._store)
 
@@ -88,7 +92,7 @@ class IngestionService:
         filename = path.name
         meta = extractor.extract(filename, text)
 
-        # Deliverable 17.1: Layout-aware section parsing
+        # Deliverable 17.1 & Phase 19: Layout-aware section parsing and parent-document mapping
         parsed_chunks = self._parser.parse_document(filepath_or_name=str(path), content=text)
         if not parsed_chunks:
             fallback_chunks = ResumeChunker().chunk(text)
@@ -102,8 +106,15 @@ class IngestionService:
                 for fc in fallback_chunks
             ]
 
+        # Phase 19 (ADR-019): Parent-Document Hierarchical Chunk Mapping
+        child_chunks, _ = self._parent_service.create_hierarchical_chunks(
+            filename=filename,
+            resume_path=str(path),
+            parsed_chunks=parsed_chunks,
+        )
+
         # Deliverable 17.2: Anthropic Contextual Retrieval Prepending
-        chunks = self._enricher.enrich_chunks(parsed_chunks, meta)
+        chunks = self._enricher.enrich_chunks(child_chunks, meta)
 
         logger.info(
             f"Ingesting file '{filename}' - Candidate: {meta['candidate_name']}, "
@@ -132,6 +143,7 @@ class IngestionService:
                     "role": ch.role or "",
                     "company": ch.company or "",
                     "raw_content": ch.raw_content,
+                    "parent_id": ch.metadata.get("parent_id", ""),
                 }
             )
 
@@ -266,8 +278,18 @@ class IngestionService:
                 for fc in fallback_chunks
             ]
 
+        content_hash = hashlib.sha256(stream_bytes).hexdigest()[:12]
+        resume_ref = f"stream://{filename}?hash={content_hash}"
+
+        # Phase 19 (ADR-019): Parent-Document Hierarchical Chunk Mapping
+        child_chunks, _ = self._parent_service.create_hierarchical_chunks(
+            filename=filename,
+            resume_path=resume_ref,
+            parsed_chunks=parsed_chunks,
+        )
+
         # Deliverable 17.2: Anthropic Contextual Retrieval Prepending
-        chunks = self._enricher.enrich_chunks(parsed_chunks, meta)
+        chunks = self._enricher.enrich_chunks(child_chunks, meta)
 
         logger.info(
             f"Ingesting in-memory stream '{filename}' - Candidate: {meta['candidate_name']}, "
@@ -276,8 +298,6 @@ class IngestionService:
 
         pipeline = self.pipeline
         added_chunks = 0
-        content_hash = hashlib.sha256(stream_bytes).hexdigest()[:12]
-        resume_ref = f"stream://{filename}?hash={content_hash}"
 
         # Clean up any prior chunks for this exact filename in the store before re-indexing
         try:
@@ -308,6 +328,7 @@ class IngestionService:
                     "role": ch.role or "",
                     "company": ch.company or "",
                     "raw_content": ch.raw_content,
+                    "parent_id": ch.metadata.get("parent_id", ""),
                 }
             )
 

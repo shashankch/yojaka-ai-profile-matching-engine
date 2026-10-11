@@ -910,6 +910,69 @@ def generate_calibrated_margin_subgraphs():
             synthesis >> Edge(label="Final Report & Scores", color="#059669") >> out
 
 
+def generate_hyde_parent_doc_rag():
+    """Generates Advanced RAG Architecture: HyDE Query Synthesis, Parent-Document Chunking & Local Inference (Phase 19 / ADR-019)."""
+    output_path = OUTPUT_DIR / "hyde_parent_doc_rag"
+    with Diagram(
+        "Advanced RAG Architecture, Parent-Doc Chunking & Air-Gapped Local Inference (Phase 19 / ADR-019)",
+        filename=str(output_path),
+        show=False,
+        direction="LR",
+        graph_attr={**BASE_GRAPH_ATTR, "ranksep": "1.3", "nodesep": "0.8"},
+        node_attr=BASE_NODE_ATTR,
+        edge_attr=BASE_EDGE_ATTR,
+    ):
+        with Cluster(
+            "1. Ingestion & Hierarchical Parent-Child Decomposition",
+            graph_attr=cluster_attr("#f8fafc", "#cbd5e1"),
+        ):
+            doc_in = Storage("Raw Resumes / JDs\n(PDF / DOCX / TXT)")
+            parent_store = Storage("ParentDocumentStore\n(1000-1500 chars parent blocks)")
+            child_split = Python("ParentDocumentService\n(150-250 token child chunks)")
+            chroma_child = Custom("Vector Collection\n(ChromaDB Child Embeddings)", ICON_CHROMA)
+            bm25_index = Python("Sparse BM25 Index\n(BM25Okapi Exact Terms)")
+
+            doc_in >> parent_store
+            doc_in >> child_split
+            child_split >> Edge(label="Parent Pointer UUID", color="#475569") >> parent_store
+            child_split >> Edge(label="Index Embeddings", color="#2563eb") >> chroma_child
+            child_split >> Edge(label="Index Tokens", color="#475569") >> bm25_index
+
+        with Cluster(
+            "2. Query Processing & Pre-Retrieval Filtering",
+            graph_attr=cluster_attr("#eff6ff", "#93c5fd"),
+        ):
+            recruiter = User("Recruiter Query / JD\n(Prompt + Constraints)")
+            metadata_filter = Python("FacetedFilter\n(Exp, Edu & Must-Haves)")
+            hyde_gen = Custom("HyDEService\n(Synthesized Profile Bio)", ICON_GROQ)
+            dense_embed = Custom("Query Embedder\n(SentenceTransformer)", ICON_HF)
+
+            recruiter >> Edge(label="Criteria Metadata", color="#2563eb") >> metadata_filter
+            recruiter >> Edge(label="Query Text", color="#2563eb") >> hyde_gen
+            hyde_gen >> Edge(label="Hypothetical Candidate", color="#7c3aed") >> dense_embed
+            recruiter >> Edge(label="Exact Terms", color="#d97706") >> bm25_index
+
+        with Cluster(
+            "3. Two-Stage Rerank & Air-Gapped Local Screening",
+            graph_attr=cluster_attr("#f0fdf4", "#86efac"),
+        ):
+            hybrid_merge = Kendra("Hybrid Score Merge\n(0.5 Dense + 0.5 Sparse)")
+            reranker = Custom("Cross-Encoder Rerank\n(bge-reranker-base)", ICON_HF)
+            local_llm = Python("Local Daemon / Air-Gapped\n(Ollama / vLLM / Local)")
+            deep_screen = Custom("Dual-Rubric Deep Screen\n(Tech 60% + Domain 40%)", ICON_LANGGRAPH)
+            dashboard = Custom("Recruiter Dashboard\n(Streamlit & FastAPI)", ICON_STREAMLIT)
+
+            dense_embed >> Edge(color="#2563eb") >> chroma_child
+            chroma_child >> Edge(color="#2563eb") >> hybrid_merge
+            bm25_index >> Edge(color="#2563eb") >> hybrid_merge
+            metadata_filter >> Edge(label="Candidate Filter Mask", color="#059669") >> hybrid_merge
+            hybrid_merge >> Edge(label="Top-K Candidates", color="#2563eb") >> reranker
+            reranker >> Edge(label="Enrich via Parent UUID", color="#059669") >> parent_store
+            parent_store >> Edge(label="Full Section Blocks", color="#059669") >> deep_screen
+            local_llm >> Edge(label="Zero-Cloud Tokens", color="#10b981") >> deep_screen
+            deep_screen >> Edge(label="Verified Shortlist & Matrix", color="#059669") >> dashboard
+
+
 def preserve_state_machine_assets():
     """Copies the canonical state_machine assets without regenerating them."""
     canonical_png = DOCS_DIR / "state_machine.png"
@@ -919,7 +982,7 @@ def preserve_state_machine_assets():
 
 
 def main():
-    """Generates all 17 architecture and dataflow diagrams."""
+    """Generates all 18 architecture and dataflow diagrams."""
     print("🎨 Generating Yojaka AI Architecture & Dataflow Diagrams with Diagrams (diagrams as code)...")
 
     diagram_generators = [
@@ -940,6 +1003,7 @@ def main():
         ("Dual-Surface UI & API", generate_dual_surface_ui_api),
         ("Layout Parsing & Two-Stage Rerank", generate_layout_parsing_two_stage_rerank),
         ("Calibrated Margin & Subgraphs", generate_calibrated_margin_subgraphs),
+        ("HyDE & Parent-Doc Advanced RAG", generate_hyde_parent_doc_rag),
     ]
 
     for name, gen_fn in diagram_generators:
@@ -947,7 +1011,7 @@ def main():
         gen_fn()
 
     preserve_state_machine_assets()
-    print("✅ All 16 architecture diagrams generated successfully in docs/assets/diagrams/")
+    print("✅ All 17 architecture diagrams generated successfully in docs/assets/diagrams/")
     print("ℹ️ Note: docs/state_machine.png and docs/state_machine.mermaid are strictly preserved intact from LangGraph.")
 
 

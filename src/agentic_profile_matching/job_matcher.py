@@ -9,6 +9,9 @@ from rank_bm25 import BM25Okapi
 from agentic_profile_matching import config
 from agentic_profile_matching.observability import get_logger
 from agentic_profile_matching.services.reranker import CrossEncoderReranker
+from agentic_profile_matching.services.hyde_service import HyDEService
+from agentic_profile_matching.services.parent_document_service import ParentDocumentService
+from agentic_profile_matching.services.faceted_filter import FacetedFilter
 from agentic_profile_matching.stores import BaseVectorStore, ChromaVectorStore
 
 logger = get_logger("agentic_profile_matching.job_matcher")
@@ -25,6 +28,8 @@ class JobMatcher:
         collection_name: str = "resumes",
         reranker: Optional[CrossEncoderReranker] = None,
         use_reranker: Optional[bool] = None,
+        hyde_service: Optional[HyDEService] = None,
+        parent_doc_service: Optional[ParentDocumentService] = None,
     ):
         self.store = store or ChromaVectorStore(collection_name=collection_name)
         self.model_name = model_name or config.EMBEDDING_MODEL
@@ -38,6 +43,10 @@ class JobMatcher:
         else:
             self.use_reranker = use_reranker
         self.reranker = reranker or CrossEncoderReranker(enabled=self.use_reranker)
+
+        # Phase 19: HyDE Query Synthesis & Parent Document Services
+        self.hyde_service = hyde_service or HyDEService()
+        self.parent_doc_service = parent_doc_service or ParentDocumentService()
 
         # Cache attributes for BM25 Okapi index
         self._cached_bm25: Optional[BM25Okapi] = None
@@ -89,6 +98,9 @@ class JobMatcher:
         must_have_skills: Optional[List[str]] = None,
         apply_filters: bool = True,
         skill_expansions: Optional[Dict[str, List[str]]] = None,
+        use_hyde: Optional[bool] = None,
+        llm: Optional[Any] = None,
+        faceted_filter: Optional[FacetedFilter] = None,
     ) -> Dict[str, Any]:
         exp_matches = re.findall(r"(\d+)\+?\s*(?:years?|yrs?)\b", job_description, re.IGNORECASE)
         if min_exp is None:
@@ -140,8 +152,22 @@ class JobMatcher:
                             return True
             return False
 
-        # 1. Semantic Search using Vector Store
-        query_emb = self.embedder.encode(job_description).tolist()
+        # 1. Semantic Search using Vector Store (with Phase 19 HyDE Query Synthesis)
+        should_use_hyde = self.hyde_service.enabled if use_hyde is None else use_hyde
+        if should_use_hyde and (llm is not None or use_hyde is True):
+            requirements_context = {
+                "must_have_skills": must_have_skills or [],
+                "min_experience_years": min_exp or 0,
+            }
+            dense_query_text = self.hyde_service.generate_hypothetical_profile(
+                query=job_description,
+                requirements=requirements_context,
+                llm=llm,
+            )
+        else:
+            dense_query_text = job_description
+
+        query_emb = self.embedder.encode(dense_query_text).tolist()
         results = self.store.query(query_embedding=query_emb, n_results=len(ids))
 
         semantic_scores_dict = {}
@@ -187,15 +213,23 @@ class JobMatcher:
         else:
             normalized_bm25_scores = [0.0] * len(documents)
 
-        # 3. Hybrid Retrieval & Filtering
+        # 3. Pre-Retrieval Faceted Metadata Filtering (Deliverable 19.4 / ADR-019)
+        valid_chunk_indices = None
+        if apply_filters and faceted_filter is not None:
+            valid_chunk_indices = set(faceted_filter.filter_indices(metadatas, skill_expansions=skill_expansions))
+
+        # 4. Hybrid Retrieval & Filtering
         candidate_matches = {}
 
         for chunk_idx, (doc_id, doc_text, meta) in enumerate(zip(ids, documents, metadatas)):
+            if valid_chunk_indices is not None and chunk_idx not in valid_chunk_indices:
+                continue
+
             candidate_exp = int(meta.get("experience_years", 0))
             candidate_skills_str = meta.get("skills", "")
             candidate_skills = [s.strip() for s in candidate_skills_str.split(",") if s.strip()]
 
-            if apply_filters:
+            if apply_filters and valid_chunk_indices is None:
                 # Filter by experience
                 if candidate_exp < min_exp:
                     continue
@@ -317,6 +351,9 @@ class JobMatcher:
                     "raw_text": "\n\n".join(ch["content"] for ch in info["chunks"]),
                 }
             )
+
+        # Parent-Document Context Enrichment (Deliverable 19.2 / ADR-019)
+        top_matches = [self.parent_doc_service.enrich_candidate_with_parents(cand) for cand in top_matches]
 
         # Sort matches by score descending (Stage 1 Coarse Ranking)
         top_matches.sort(key=lambda x: x["match_score"], reverse=True)

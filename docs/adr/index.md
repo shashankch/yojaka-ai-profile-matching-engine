@@ -28,6 +28,7 @@ This directory contains the individual Architecture Decision Records (ADRs) for 
 | [**ADR-016**](ADR-016-zero-disk-in-memory-resume-ingestion.md) | Zero-Disk In-Memory Resume Ingestion | Implemented | `v1.2.0` | Ingestion & Privacy |
 | [**ADR-017**](ADR-017-layout-parsing-contextual-retrieval-reranking.md) | Layout-Aware Section Parsing, Anthropic Contextual Retrieval & Two-Stage Reranking | Implemented | `v1.4.0` | Ingestion & Retrieval |
 | [**ADR-018**](ADR-018-calibrated-margin-routing-and-subgraphs.md) | Calibrated Margin-Based Intent Routing, Native LangGraph Commands & Parallel Dual-Rubric Subgraphs | Implemented | `v1.5.0` | Agent Architecture & Evaluation |
+| [**ADR-019**](ADR-019-advanced-rag-hyde-parent-doc-and-local-inference.md) | Advanced RAG Architecture: HyDE Query Synthesis, Parent-Doc Chunking & Air-Gapped Local Inference | Implemented | `v1.6.0` | Advanced RAG & Privacy |
 
 ---
 
@@ -123,5 +124,10 @@ This directory contains the individual Architecture Decision Records (ADRs) for 
 - **Context**: Input intent classification oscillated between high-latency LLM calls and brittle string heuristics; conditional edge boilerplate cluttered graph state transitions; candidate audits suffered from slow multi-agent debate loops; monolithic state increased coupling.
 - **Decision**: Mathematical confidence margin gate ($\Delta = \text{Top1} - \text{Top2} \ge 0.12$) routing confident queries in <2ms at $0 LLM cost while escalating ambiguity to structured LLMs + LangGraph 1.x native `Command(goto=..., update={...})` with destination routing + concurrent dual-rubric evaluation (Technical Architecture 60% + Domain Fit 40%) with deterministic mathematical aggregation + isolated typed subgraphs (`JDAnalyzerSubgraph`, `TalentRetrievalSubgraph`, `DeepScreeningSubgraph`, `SynthesisSubgraph`).
 - **Consequence**: Zero misrouting errors, sub-millisecond confident query dispatch, committee-grade evaluation fidelity in a single round with ~1.2s wall-clock latency, and modular, clean state graph pipelines.
+
+### [ADR-019: Advanced RAG Architecture: HyDE Query Synthesis, Parent-Document Chunking & Air-Gapped Local Inference](ADR-019-advanced-rag-hyde-parent-doc-and-local-inference.md)
+- **Context**: Terse recruiter queries suffer from semantic vocabulary mismatch against accomplishment-dense resumes; naive small chunking fragments career trajectories and causes deep screening hallucinations; cloud LLM egress raises privacy compliance concerns for sensitive resumes.
+- **Decision**: Hypothetical Document Embeddings (`HyDEService`) synthesizing candidate profiles before vector search + dual-granularity Small-to-Big chunk mapping (`ParentDocumentService`) linking 150–250 token child chunks in ChromaDB to 1,000–1,500 character parent sections in `ParentDocumentStore` + pre-retrieval faceted metadata filtering (`FacetedFilter`) + air-gapped local model inference (`LocalInferenceService`) supporting Ollama and vLLM daemons via OpenAI-compatible endpoints with automated health probing.
+- **Consequence**: Bridges query-resume semantic vocabulary gap (+9.1% Recall@10, +9.5% MRR), preserves complete section narratives during dual-rubric screening, enables 100% zero-cloud sovereign privacy deployments, and eliminates state-level API key storage (resolving Finding 6).
 
 

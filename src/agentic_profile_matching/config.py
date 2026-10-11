@@ -38,6 +38,8 @@ SUPPORTED_PROVIDERS = {
     "Gemini": ["gemini-1.5-pro", "gemini-1.5-flash"],
     "Sarvam AI": ["sarvam-105b", "sarvam-2b"],
     "OpenAI": ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"],
+    "Ollama (Local)": ["llama3.2", "qwen2.5:7b", "deepseek-r1:8b", "mistral:7b"],
+    "vLLM (Local)": ["local-model"],
     "Custom (OpenAI-compatible)": ["custom-model"],
 }
 
@@ -50,6 +52,14 @@ DEFAULT_COARSE_LIMIT = int(os.getenv("DEFAULT_COARSE_LIMIT", "10"))
 DEFAULT_DEEP_LIMIT = int(os.getenv("DEFAULT_DEEP_LIMIT", "5"))
 DEFAULT_RECOMMENDATION_LIMIT = int(os.getenv("DEFAULT_RECOMMENDATION_LIMIT", "3"))
 RESUME_TRUNCATION_LIMIT = int(os.getenv("RESUME_TRUNCATION_LIMIT", "12000"))
+
+# Phase 19: Advanced RAG (HyDE & Parent Document) & Air-Gapped Local Inference
+USE_HYDE = os.getenv("USE_HYDE", "True").lower() in ("true", "1", "yes")
+HYDE_TIMEOUT = float(os.getenv("HYDE_TIMEOUT", "1.5"))
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+LOCAL_INFERENCE_URL = os.getenv("LOCAL_INFERENCE_URL", "http://localhost:8000/v1")
+LOCAL_INFERENCE_MODEL = os.getenv("LOCAL_INFERENCE_MODEL", "llama3.2")
 
 # MCP Protocol Configuration
 USE_MCP = os.getenv("USE_MCP", "False").lower() in ("true", "1", "yes")
@@ -101,12 +111,31 @@ def get_llm_model(provider: str, model_name: str, api_key: str, api_url: Optiona
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(model=model_name, api_key=api_key)  # type: ignore[arg-type]
+    elif "ollama" in prov:
+        from langchain_openai import ChatOpenAI
+
+        ollama_url = api_url or OLLAMA_BASE_URL
+        base_url = ollama_url if ollama_url.endswith("/v1") else f"{ollama_url.rstrip('/')}/v1"
+        return ChatOpenAI(
+            model=model_name or OLLAMA_MODEL,
+            api_key=api_key or "ollama",
+            base_url=base_url,
+        )
+    elif "vllm" in prov or "local" in prov:
+        from langchain_openai import ChatOpenAI
+
+        vllm_url = api_url or LOCAL_INFERENCE_URL
+        return ChatOpenAI(
+            model=model_name or LOCAL_INFERENCE_MODEL,
+            api_key=api_key or "local",
+            base_url=vllm_url,
+        )
     elif "custom" in prov or "openai-compatible" in prov:
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
             model=model_name,
-            api_key=api_key,  # type: ignore[arg-type]
+            api_key=api_key or "custom",  # type: ignore[arg-type]
             base_url=api_url or "http://localhost:11434/v1",
         )
     else:

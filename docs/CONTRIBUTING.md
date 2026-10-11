@@ -115,22 +115,11 @@ python -m agentic_profile_matching.run_scenarios
 
 ## 📐 Architectural Guidelines & Conventions
 
-Before submitting non-trivial PRs, please review:
+All contributions must strictly comply with the project standards documented in:
 
-- [Engineering Conventions](CONVENTIONS.md) (`docs/CONVENTIONS.md`)
-- [Technical Architecture](architecture.md) (`docs/architecture.md`)
-- [Architecture Decision Records](adr/index.md) (`docs/adr/`)
-
-Key standards to uphold:
-
-1. **Stateless Credential Isolation (ADR-011 / CWE-312)**: NEVER store API keys or provider secrets inside `AgentState`. Inject credentials strictly at runtime via `RunnableConfig` (`configurable["api_key"]`).
-2. **Functional State Immutability (ADR-012)**: Node functions must never mutate `AgentState` or nested candidate dictionaries in place. Always construct fresh dictionaries (`{**c, ...}`) to ensure LangGraph checkpoint retry safety.
-3. **Dynamic Generative Skill Expansion (ADR-013)**: Avoid static manual taxonomy YAML files for domain vocabulary. Use LLM generative `skill_expansions` to evaluate semantic technology equivalence.
-4. **Concurrency-Controlled Screening (ADR-014)**: Parallel candidate audits must be constrained via bounded `ThreadPoolExecutor` and `threading.Semaphore` rate limiters.
-5. **Zero-Disk In-Memory Ingestion (ADR-016)**: Process candidate uploads directly in memory via `io.BytesIO` streams; do not write unencrypted candidate files to `/tmp`.
-6. **Structured JSON Logging**: Use `get_logger()` from `agentic_profile_matching.observability` and `@trace_node` decorators; avoid unformatted `print()` calls in production modules.
-7. **Clean Separation of Concerns**: Keep domain logic decoupled from presentation (Streamlit) and transport protocols (MCP).
-8. **Diagrams-as-Code Maintenance Protocol**: Whenever introducing new phases, altering architecture, adding providers/storage backends, or changing state graph dataflows, update the corresponding diagram generator in `scripts/generate_diagrams.py`, regenerate via `python scripts/generate_diagrams.py`, and verify with `mkdocs build --strict` (see [Engineering Conventions](CONVENTIONS.md#diagrams-maintenance-protocol)).
+- 📖 **[Engineering Conventions](CONVENTIONS.md)** (`docs/CONVENTIONS.md`): Core architectural principles, state immutability (ADR-012), stateless credential isolation (ADR-011), structured JSON logging, and diagrams-as-code maintenance protocol.
+- 🏛️ **[Technical Architecture](architecture.md)** (`docs/architecture.md`): System architecture, cascading screening funnel, component boundaries, and dataflows.
+- 📋 **[Architecture Decision Records](adr/index.md)** (`docs/adr/`): Formal design records (ADR-001 through ADR-019).
 
 ---
 

@@ -91,7 +91,8 @@ uv run pytest tests/ -v
 
 ---
 
-## 🎨 7. Architecture & Diagrams Maintenance Protocol {: #diagrams-maintenance-protocol }
+<a id="diagrams-maintenance-protocol"></a>
+## 🎨 7. Architecture & Diagrams Maintenance Protocol
 
 To ensure documentation remains accurate and publication-grade as the system evolves:
 

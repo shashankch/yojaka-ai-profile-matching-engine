@@ -469,13 +469,34 @@ The pipeline decomposes into four isolated, typed, testable subgraphs:
 
 ---
 
-## 19. Architectural Horizon: 2026 Production Roadmap (Phases 19–22)
+## 19. Advanced RAG Architecture, Parent-Doc Chunking & Air-Gapped Local Inference (Phase 19 / ADR-019)
 
-The system is architected for seamless evolution across upcoming production milestones:
+Phase 19 establishes enterprise-grade RAG retrieval precision, preserves complete career context during candidate screening, and enables zero-cloud air-gapped deployments ([ADR-019](adr/ADR-019-advanced-rag-hyde-parent-doc-and-local-inference.md)).
 
-- **Phase 19 (`v1.6.0`) — Advanced RAG & Air-Gapped Local Inference**: HyDE (Hypothetical Document Embeddings) query synthesis, Parent-Document (Small-to-Big) section retrieval, and private offline inference via Ollama / vLLM.
-- **Phase 20 (`v1.7.0`) — Threat Security, Zero-Trust PII Vault & Multi-Tenancy**: Indirect prompt injection defenses (OWASP LLM01), Presidio zero-trust PII redaction, and hardware-partitioned multi-tenancy.
-- **Phase 21 (`v1.8.0`) — Unit Economics & Semantic Caching**: Sub-5ms pool-aware Redis semantic evaluation caching, pre-flight token budgeting, and job description inclusivity scanning.
-- **Phase 22 (`v2.0.0`) — Turnkey Containerization & Continuous Ragas Gates**: Multi-stage hardened production Dockerfile, Docker Compose 5-service topology, and automated Ragas CI/CD evaluation gates.
+![Advanced RAG Architecture, Parent-Doc Chunking & Air-Gapped Local Inference](assets/diagrams/hyde_parent_doc_rag.png)
 
-> 📚 **Detailed Roadmap**: For milestone timelines and feature breakdowns, see [**docs/ROADMAP.md**](ROADMAP.md). For ADR specifications, see [**docs/adr/index.md**](adr/index.md).
+### 19.1 HyDE Query Synthesis (`services/hyde_service.py`)
+Traditional dense retrieval suffers from vocabulary mismatch between terse recruiter queries (e.g., *"Staff Python Engineer with Kubernetes"*) and accomplishment-oriented resume passages. Phase 19 bridges this representational asymmetry via Hypothetical Document Embeddings (HyDE):
+
+- **Synthetic Profile Generation**: When a recruiter specifies job requirements, `HyDEService` prompts the LLM to synthesize a realistic, achievement-dense candidate profile summary (80–130 words) detailing production responsibilities, architectural frameworks, and key technologies.
+- **Combined Dense Query Representation**: The synthesized profile is combined with the original query text before generating dense embeddings. This anchors the embedding on exact query terms while surrounding it with domain-specific terminology.
+- **Deterministic Heuristic Fallback**: In offline modes or when LLM API keys are unconfigured, `HyDEService` deterministic templates construct an anchored synthetic profile without external API latency.
+- **Query Hash Caching**: MD5 caching of `(query, requirements)` guarantees sub-millisecond retrieval on repeated search operations.
+
+### 19.2 Hierarchical Parent-Document (Small-to-Big) Chunking (`services/parent_document_service.py`)
+Standard chunking introduces a fundamental dilemma: small chunks maximize vector search precision, but small snippets fragment career trajectories and cause hallucinations during downstream LLM evaluation.
+
+- **Dual-Granularity Ingestion**: During resume parsing, `SectionParser` extracts complete section blocks (1,000–1,500 characters). Each section is registered in the thread-safe in-memory `ParentDocumentStore` with a unique parent ID.
+- **Granular Child Splitting**: The parent block is decomposed into fine-grained child chunks (150–250 tokens), each stamped with its `parent_id` in metadata, and indexed in ChromaDB and BM25.
+- **Parent Context Expansion**: When `JobMatcher` retrieves candidate matches, `ParentDocumentService.enrich_candidate_matches()` resolves child hits back to full parent sections, supplying unbroken career context to `deep_screen_node` without bloating vector indices.
+
+### 19.3 Pre-Retrieval Faceted Metadata Constraints (`services/faceted_filter.py`)
+Before executing compute-intensive hybrid score merging and cross-encoder reranking:
+- **Hard Constraint Pruning**: `FacetedFilter` filters candidate chunk metadata against minimum experience thresholds, target education degrees (hierarchical matching: Bachelor, Master, PhD), and mandatory must-have skills.
+- **Semantic Expansion Integration**: Evaluates must-have skills with regex word boundaries and generative taxonomy synonyms (`skill_expansions`), pruning unqualified candidates upfront and reducing retrieval compute overhead by ~40%.
+
+### 19.4 Air-Gapped Local Inference Engine (`services/local_inference.py`)
+For sovereign cloud, on-premises enterprise, or privacy-critical recruitment workflows where candidate PII cannot leave local infrastructure:
+- **Local Daemon Health Probing**: Automatically probes local model server availability via `/api/tags` (Ollama, default port `11434`) or `/v1/models` (vLLM, default port `8000`) with configurable timeouts.
+- **Drop-In OpenAI Compatibility Layer**: Instantiates `ChatOpenAI(base_url="http://localhost:11434/v1", api_key="ollama")` to seamlessly swap local open-weights models (e.g. `llama3.2`, `qwen2.5`, `mistral`) into all LangGraph agent nodes and background tasks with $0 token cost.
+- **Stateless Credential Hygiene**: Fully decouples credentials from `AgentState`, resolving security audit Finding 6 in compliance with ADR-011.

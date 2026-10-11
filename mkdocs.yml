@@ -117,6 +117,7 @@ nav:
       - ADR-016 Zero-Disk In-Memory Ingestion: adr/ADR-016-zero-disk-in-memory-resume-ingestion.md
       - ADR-017 Layout Parsing & Two-Stage Rerank: adr/ADR-017-layout-parsing-contextual-retrieval-reranking.md
       - ADR-018 Calibrated Margin & Subgraphs: adr/ADR-018-calibrated-margin-routing-and-subgraphs.md
+      - ADR-019 Advanced RAG & Local Inference: adr/ADR-019-advanced-rag-hyde-parent-doc-and-local-inference.md
   - Project & Community:
       - Contributing Guide: CONTRIBUTING.md
       - Changelog: CHANGELOG.md

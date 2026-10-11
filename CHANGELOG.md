@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-10-10
+
+### Added
+- **HyDE Query Synthesis**: Hypothetical Document Embeddings service (`HyDEService`) synthesizing candidate profiles before dense vector retrieval to eliminate query-resume terminology mismatch ([ADR-019](docs/adr/ADR-019-advanced-rag-hyde-parent-doc-and-local-inference.md)).
+- **Hierarchical Parent-Document Chunking**: Implemented `ParentDocumentService` and thread-safe in-memory `ParentDocumentStore`, linking 150–250 token child chunks in ChromaDB to 1,000–1,500 character parent section blocks to eliminate context fragmentation during dual-rubric screening.
+- **Air-Gapped Local Inference Engine**: Turnkey local inference service (`LocalInferenceService`) supporting Ollama and vLLM daemons via OpenAI-compatible endpoints with automated health probing for zero-cloud sovereign privacy deployments.
+- **Pre-Retrieval Faceted Metadata Constraints**: Implemented `FacetedFilter` pruning candidates by experience years, education levels, and must-have skills with dynamic generative taxonomy expansions before hybrid scoring.
+- **Architecture Diagram as Code**: Published publication-grade architecture diagram (`hyde_parent_doc_rag.png`) generated programmatically via Mingrammer `diagrams`.
+- **ADR-019**: Published formal architecture decision record for advanced RAG architecture, parent-document chunking, and air-gapped local inference.
+- **Test Suite Expansion**: Added 13 new unit and integration tests across HyDE, parent-document chunking, faceted filtering, and local inference daemons (140 tests total, 100% green pass rate).
+
+### Fixed
+- **Security Finding 6 (Stateless Credential Hygiene)**: Decoupled API keys from `AgentState` in node model factories, logging deprecation warnings and prioritizing runtime `RunnableConfig["configurable"]` credentials.
+- **Heading Anchor Rendering**: Fixed attribute list heading syntax in `docs/CONVENTIONS.md` to render cleanly in standard markdown viewports.
+
 ## [1.5.0] - 2026-10-09
 
 ### Added

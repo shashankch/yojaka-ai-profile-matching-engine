@@ -6,7 +6,7 @@ This document outlines high-level implementation milestones and strategic releas
 
 ---
 
-## 📍 Implementation Milestones (Phases 1–18)
+## 📍 Implementation Milestones (Phases 1–19)
 
 ### Foundational Pipeline & Core State Machine (Phases 1–7 • v0.1.0) ✅
 - **Agentic Core**: 9-node LangGraph `StateGraph` workflow with deterministic state transitions and `MemorySaver` checkpointing.
@@ -54,35 +54,30 @@ This document outlines high-level implementation milestones and strategic releas
 - **LangGraph Native Commands**: Refactored workflow nodes to native LangGraph `Command(goto=..., update={...})` primitives with destination routing, eliminating conditional edge boilerplate.
 - **Parallel Dual-Rubric Structured Evaluation**: Concurrent structured scoring (Technical Architecture Competence 60% + Talent Sourcing Fit 40%) with deterministic mathematical aggregation, eliminating slow debate loops while delivering committee-grade scorecards.
 - **Modular Typed Subgraphs**: Pipeline decomposed into isolated, independently testable subgraphs (`JDAnalyzerSubgraph`, `TalentRetrievalSubgraph`, `DeepScreeningSubgraph`, `SynthesisSubgraph`).
-- **Diagram as Code Deliverable**: High-resolution publication-grade architecture diagram generated via `scripts/generate_diagrams.py` ([calibrated_margin_subgraphs.png](assets/diagrams/calibrated_margin_subgraphs.png)).
+
+### Advanced RAG Architecture & Air-Gapped Local Inference (Phase 19 • v1.6.0) ✅
+- **HyDE (Hypothetical Document Embeddings)**: Query expansion synthesizing realistic candidate profile summaries from job descriptions before vector search to bridge vocabulary mismatch ([ADR-019](adr/ADR-019-advanced-rag-hyde-parent-doc-and-local-inference.md)).
+- **Hierarchical Parent-Document Chunking**: Fine-grained 150–250 token child vector retrieval linked to 1,000–1,500 character parent sections in `ParentDocumentStore`, eliminating context fragmentation during screening.
+- **Air-Gapped Local Inference**: Turnkey offline model execution via Ollama and vLLM daemons for GDPR sovereign cloud compliance and zero cloud API costs.
+- **Pre-Retrieval Faceted Filtering**: Direct vector and lexical metadata constraints for experience years and education criteria with dynamic skill expansion support.
 
 ---
 
-## 🚀 Future Milestones (Phases 19–22)
-
-### Phase 19: Advanced RAG Architecture & Air-Gapped Local Inference (v1.6.0)
-- **HyDE (Hypothetical Document Embeddings)**: Query expansion generating synthetic candidate resumes to bridge recruiter search vocabulary gaps.
-- **Parent-Document Visual Chunking**: Fine-grained sub-chunk vector retrieval with full-section context expansion for dual-rubric screening.
-- **Air-Gapped Local Inference (Ollama / vLLM)**: Fully private, zero-API-cost on-premise model execution for GDPR and enterprise compliance.
-- **Pre-Retrieval Faceted Filtering**: Direct vector and lexical metadata constraints for years of experience and education criteria.
-- **Diagram as Code Deliverable**: Publication-grade architecture diagram in `scripts/generate_diagrams.py` (`docs/assets/diagrams/hyde_parent_doc_rag.png`).
+## 🚀 Future Milestones (Phases 20–22)
 
 ### Phase 20: Resume Threat Security, Zero-Trust PII Redaction Vault & Multi-Tenancy (v1.7.0)
 - **Indirect Prompt Injection Defense (OWASP LLM01)**: Input sanitization heuristics, canary detection, and strict XML boundary tags neutralizing hidden resume injection payloads.
 - **Zero-Trust PII Tokenization Vault**: Pre-screening entity tokenization replacing personal candidate identifiers (`[CANDIDATE_A]`) for EEOC blind hiring meritocracy.
 - **Reversible Recruiter Vault**: AES-256 encrypted candidate identity mapping revealed only upon authorized recruiter outreach with immutable audit logging.
 - **Hardware-Partitioned Multi-Tenancy**: Isolated collection namespaces across vector stores (`tenant_{org_id}_resumes`) and session checkpoints.
-- **Diagram as Code Deliverable**: Publication-grade architecture diagram in `scripts/generate_diagrams.py` (`docs/assets/diagrams/zero_trust_pii_vault_security.png`).
 
 ### Phase 21: Unit Economics, Semantic Caching & Budget Circuit Breakers (v1.8.0)
 - **Pool-Aware Semantic Evaluation Cache**: Sub-5ms response caching for semantically equivalent recruiter queries, guarded by pool-version hashes to prevent stale candidate rankings.
 - **Granular Cost & Token Budgeting**: Predictive `tiktoken` calculation, real-time per-query and per-tenant cost accounting, daily spend caps, and runaway loop circuit breakers.
 - **Job Description Inclusivity Scanner**: Automated open-source linguistic analysis flagging exclusionary or demographic-biased wording and generating auditable competency-grounded rationale trails.
-- **Diagram as Code Deliverable**: Publication-grade architecture diagram in `scripts/generate_diagrams.py` (`docs/assets/diagrams/semantic_cache_token_budgeting.png`).
 
 ### Phase 22: Production Infrastructure, Containerization & Continuous Evals (v2.0.0)
 - **Multi-Stage Hardened Production Dockerfile**: Minimal non-root container image (<250MB) isolating build dependencies for ASGI sidecar and workers.
 - **Docker Compose Multi-Service Topology**: Single-command orchestration for FastAPI sidecar, Streamlit UI, Celery worker, Redis 7, vector services, and self-hosted Langfuse.
 - **Continuous Ragas & DeepEval CI/CD Quality Gates**: Automated RAG Triad benchmarks (Context Precision $\ge 0.88$, Recall@K, Faithfulness $\ge 0.90$) blocking pull requests on score regression.
 - **Deep Health Probes & Rate Limiting**: `/healthz` and `/readyz` probing database, Redis, and workers with `slowapi` rate-limiting shield.
-- **Diagram as Code Deliverable**: Publication-grade architecture diagram in `scripts/generate_diagrams.py` (`docs/assets/diagrams/turnkey_container_ragas_gates.png`).
